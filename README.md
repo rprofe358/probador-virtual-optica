@@ -4,6 +4,24 @@ Prototipo de probador de monturas con realidad aumentada para una óptica. Corre
 
 **Funciones:** cambio de montura y color, simulación de Transitions (gris, café, verde G-15), antirreflejo, filtro de luz azul, foto con la montura puesta y carga de modelos propios en formato `.glb`.
 
+## Cómo funciona el 3D
+
+- **Pose de la cabeza:** se ajusta la cara canónica de MediaPipe (468 puntos, en cm) a 33 puntos estables de la cara detectada (frente, nariz, comisuras de los ojos, pómulos y sienes). Así se obtienen el giro real de la cabeza y el tamaño real de la cara, y cada montura se dibuja con su ancho real en mm.
+- **Oclusión:** la cara detectada en cada cuadro funciona como una superficie invisible que tapa lo que queda detrás (por ejemplo, la patilla del lado lejano). Detrás de la cara hay un cráneo invisible cuyo ancho se ajusta a las patillas de cada montura.
+
+## Modo ajuste (personal de la óptica)
+
+Se activa con la tecla **D** o con **5 toques seguidos** sobre el nombre de la óptica. Muestra los datos de seguimiento y el botón para probar un modelo `.glb` propio.
+
+| Tecla | Acción |
+|---|---|
+| + / − | Tamaño de la montura |
+| W / S | Altura (cm) |
+| Q / E | Distancia a la cara (cm) |
+| O | Mostrar u ocultar los oclusores |
+| R | Girar 90° el modelo cargado |
+| ← / → | Cambiar de montura |
+
 ## Estructura
 
 - `index.html`: la app completa.
@@ -11,7 +29,11 @@ Prototipo de probador de monturas con realidad aumentada para una óptica. Corre
 - `herramientas/preparar-monturas.mjs`: limpia y comprime modelos descargados (requiere Node y `@gltf-transform`).
 - `herramientas/empaquetar.py`: genera una versión en un solo archivo HTML con los modelos incluidos.
 
-## Créditos de los modelos 3D de prueba
+## Créditos
+
+Malla canónica de la cara: [MediaPipe](https://github.com/google-ai-edge/mediapipe) (Apache 2.0).
+
+### Modelos 3D de prueba
 
 Licencia [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Los modelos fueron reorientados, comprimidos y, en un caso, se separaron los lentes y se quitó una firma de texto.
 

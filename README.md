@@ -2,7 +2,7 @@
 
 Prototipo de probador de monturas con realidad aumentada para una óptica. Corre en el navegador con la cámara del dispositivo: seguimiento facial con MediaPipe y render 3D con Three.js.
 
-**Funciones:** cambio de montura y color, simulación de Transitions (gris, café, verde G-15), antirreflejo, filtro de luz azul, foto con la montura puesta y carga de modelos propios en formato `.glb`.
+**Funciones:** cambio de montura y color; Transitions GEN S (8 colores), XTRActive New Generation (3 colores y 5 espejados), XTRActive Polarized, Drivewear y Color Touch (degradado o uniforme), cada uno en interior, en el carro y al sol; antirreflejo; filtro de luz azul; foto con la montura puesta y carga de modelos propios en formato `.glb` (modo ajuste).
 
 ## Cómo funciona el 3D
 
@@ -10,6 +10,8 @@ Prototipo de probador de monturas con realidad aumentada para una óptica. Corre
 - **Oclusión:** la cara detectada en cada cuadro funciona como una superficie invisible que tapa lo que queda detrás (por ejemplo, la patilla del lado lejano). Detrás de la cara hay una cabeza completa invisible (orejas, nuca, cuello) alineada con la cara y ajustada al ancho de la cara de cada persona.
 - **Posición:** los lentes se centran en las pupilas de la persona y se apoyan delante del puente de su nariz. El frente de la montura nunca lo corta la cara.
 - **Patillas:** se abren desde la bisagra solo lo necesario para pasar por fuera de la cabeza y llegan a la parte de arriba de la oreja. Si la bisagra queda baja, el frente se inclina unos grados (inclinación pantoscópica), como en unos lentes reales.
+- **Lentes:** se generan curvos (curva base ~5) a partir del contorno de cada montura y usan un material físico con transmisión: dejan ver la cara con el tinte de cada Transitions y reflejan el entorno (un HDRI más paneles de luz como los de una óptica). El antirreflejo deja un reflejo residual verdoso; el filtro de luz azul, uno azulado.
+- **Calibración personal:** durante el primer segundo con la persona de frente se promedia la forma real de su cara y desde ahí la pose se calcula contra su cara y no contra una cara promedio.
 - **Suavizado:** filtro One Euro sobre posición, escala y giro: estable con la cabeza quieta y sin retraso al moverse.
 
 ## Modo ajuste (personal de la óptica)
@@ -37,6 +39,8 @@ Se activa con la tecla **D** o con **5 toques seguidos** sobre el nombre de la �
 ## Créditos
 
 Malla canónica de la cara: [MediaPipe](https://github.com/google-ai-edge/mediapipe) (Apache 2.0).
+
+Entorno: «Royal Esplanade» de [Poly Haven](https://polyhaven.com/a/royal_esplanade) (CC0).
 
 Cabeza para la oclusión: «Male Head» de [Alexander Antipov](https://sketchfab.com/Dessen), https://sketchfab.com/3d-models/male-head-0247a25a04ba46b99629130277fe39b7 (CC BY 4.0). Se alineó a la cara canónica, se quitó la zona de la cara y los materiales.
 

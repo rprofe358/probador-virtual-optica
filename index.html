@@ -90,6 +90,8 @@ input[type=range]::-moz-range-track{height:10px;border-radius:99px;background:li
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--carey);border:3px solid var(--panel);margin-top:-9px}
 input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--carey);border:3px solid var(--panel)}
 .range-ends{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:-4px}
+.tr-desc{margin:0;font-size:12.5px;line-height:1.45;color:var(--muted)}
+.chip.small{padding:7px 11px;font-size:12.5px}
 
 .row{display:flex;gap:8px;flex-wrap:wrap}
 .chip{border:1.5px solid var(--line);background:var(--raise);border-radius:999px;padding:9px 14px;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:8px}
@@ -180,13 +182,18 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
     </div>
 
     <div class="sec">
-      <div class="sec-head"><span class="label">Transitions</span><span class="value" id="tintValue">Interior · 0%</span></div>
-      <input type="range" id="tint" min="0" max="100" value="0" aria-label="Oscurecimiento del lente">
-      <div class="range-ends"><span>Interior</span><span>Sol directo</span></div>
-      <div class="row">
-        <button class="chip sun" id="btnSun" type="button" aria-pressed="false">Salir al sol</button>
-        <span id="tintChips" class="row"></span>
+      <div class="sec-head"><span class="label">Transitions</span><span class="value" id="tintValue">Interior</span></div>
+      <div class="row" id="trTypes"></div>
+      <p class="tr-desc" id="trDesc"></p>
+      <div class="row" id="trColors"></div>
+      <div class="row" id="trExtra"></div>
+      <div class="row" id="trLight">
+        <button class="chip" type="button" data-l="0">Interior</button>
+        <button class="chip" type="button" data-l="0.5">En el carro</button>
+        <button class="chip" type="button" data-l="1">Al sol</button>
       </div>
+      <input type="range" id="tint" min="0" max="100" value="0" aria-label="Cantidad de luz">
+      <div class="range-ends"><span>Interior</span><span>Carro</span><span>Sol directo</span></div>
     </div>
 
     <div class="sec">
@@ -250,6 +257,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { FaceLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
 
 window.__probadorListo = true;
@@ -260,7 +268,12 @@ const CANON_T = new Uint16Array([173,155,133,246,33,7,382,398,362,263,466,249,30
 
 // <pose-core>
 // Puntos rígidos de la cara (frente, nariz, comisuras de los ojos, pómulos, sienes): no se mueven al hablar ni al sonreír.
-const POSE_IDX = [10,151,9,109,338,67,297,103,332, 168,6,197,195,5,4, 33,133,362,263, 116,345,123,352,50,280, 127,356,234,454,162,389,21,251];
+const POSE_IDX = [
+  10,151,9,8,109,338,67,297,103,332,69,299,104,333,108,337,      // frente
+  168,6,197,195,5,4,3,248,51,281,45,275,48,278,115,344,220,440,   // nariz
+  33,133,362,263,                                                // comisuras de los ojos
+  116,345,117,346,118,347,123,352,50,280,101,330,                // pómulos
+  127,356,234,454,162,389,21,251,93,323];                        // sienes
 
 // Valores y vectores propios de una matriz simétrica 4x4 (método de Jacobi)
 function jacobi4(A){
@@ -340,15 +353,34 @@ const FRAMES = [
     colores:[{n:'Dorado',hex:'#c9a45c'},{n:'Gunmetal',hex:'#5a5f63'},{n:'Plata',hex:'#c9ced2'}] },
 ];
 
-const TINTS = {
-  gris:  { n:'Gris',       hex:'#2f3336' },
-  cafe:  { n:'Café',       hex:'#5a3a1f' },
-  verde: { n:'Verde G-15', hex:'#36452f' },
-};
+/* Transitions: tipos y colores reales de la línea actual.
+   Cada tipo define cuánto se activa en cada luz: [interior, en el carro, sol]. Cada color es el tono a plena activación.
+   Luz: 0 = interior, 0.5 = en el carro (detrás del parabrisas), 1 = sol directo. */
+const TR = [
+  { id: 'claro', n: 'Sin Transitions', desc: 'Lente claro: no cambia con la luz.', lv: [0, 0, 0],
+    colores: [{ n: 'Claro', hex: '#ffffff' }] },
+  { id: 'gens', n: 'GEN S', desc: 'Totalmente claro adentro y oscuro al sol (categoría 3). En el carro casi no se activa: el parabrisas filtra los rayos UV.', lv: [0, 0.18, 1],
+    colores: [{ n: 'Gris', hex: '#56595c' }, { n: 'Café', hex: '#6c4a33' }, { n: 'Verde grafito', hex: '#4d5b4a' },
+              { n: 'Zafiro', hex: '#2c5b92' }, { n: 'Amatista', hex: '#62447f' }, { n: 'Ámbar', hex: '#a86c1f' },
+              { n: 'Esmeralda', hex: '#1f6b5a' }, { n: 'Rubí', hex: '#8f2b3d' }] },
+  { id: 'xtra', n: 'XTRActive', desc: 'XTRActive New Generation: leve tinte adentro, se oscurece en el carro (categoría 2) y queda extra oscuro al sol.', lv: [0.12, 0.62, 1],
+    colores: [{ n: 'Gris', hex: '#46494c' }, { n: 'Café', hex: '#5a3b27' }, { n: 'Verde grafito', hex: '#3f4b3d' }],
+    espejos: [{ n: 'Sin espejo' }, { n: 'Dorado', hex: '#e0b65a' }, { n: 'Plateado', hex: '#d0d6dc' }, { n: 'Cobre', hex: '#d0804c' },
+              { n: 'Azul verde', hex: '#3fb0a6' }, { n: 'Azul violeta', hex: '#6f6ce0' }] },
+  { id: 'xtrapol', n: 'XTRActive Polarized', desc: 'Como XTRActive, y al sol además polariza: corta los reflejos del agua, el pavimento y los vidrios.', lv: [0.12, 0.62, 1],
+    colores: [{ n: 'Gris', hex: '#44474a' }] },
+  { id: 'drive', n: 'Drivewear', desc: 'Para manejar, siempre polarizado: verde amarillo con poca luz, cobre detrás del parabrisas y café rojizo al sol.', lv: [1, 1, 1],
+    colores: [{ n: 'Drivewear', estados: ['#d3db7c', '#b97f48', '#5d3022'], hex: '#b97f48' }] },
+  { id: 'touch', n: 'Color Touch', desc: 'Un toque de color adentro que pasa a color completo al sol. En degradado o uniforme.', lv: [0.28, 0.45, 1], acabados: true,
+    colores: [{ n: 'Amatista', hex: '#6a4a86' }, { n: 'Ámbar', hex: '#ad7023' }, { n: 'Zafiro', hex: '#2d5d96' },
+              { n: 'Rubí', hex: '#952e42' }, { n: 'Esmeralda', hex: '#22705e' }] },
+];
+const TR_BY = Object.fromEntries(TR.map(t => [t.id, t]));
+
 
 const state = {
   frame: 0, color: 0,
-  tint: 0, tintTarget: 0, sun: false, tintColor: 'gris',
+  tint: 0, tintTarget: 0, trType: 'gens', trColor: 0, mirror: 0, degradado: true,
   ar: false, blue: false,
   fitScale: 1.0, fitOffY: 0.0, fitOffZ: 0.0, debug: false, showOcc: false,
 };
@@ -539,15 +571,12 @@ function buildFrame(def, col){
     }
   }
 
-  // Lentes + capa de reflejo
+  // Lentes curvos con material físico
   lensMats = []; glareMats = [];
   for (const pts of [P.rInner, P.lInner]){
-    const geo = lensGeometry(pts);
-    const lm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.06, depthWrite: false, toneMapped: false });
-    const lens = new THREE.Mesh(geo, lm); lens.renderOrder = 2; group.add(lens);
-    const gm = new THREE.MeshBasicMaterial({ map: glareTexture(), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-    const glare = new THREE.Mesh(geo, gm); glare.position.z = 0.003; glare.renderOrder = 3; group.add(glare);
-    lensMats.push(lm); glareMats.push(gm);
+    const lens = new THREE.Mesh(makeLensGeometry(pts), makeLensMaterial());
+    lens.userData.esLente = true;
+    group.add(lens);
   }
   return group;
 }
@@ -559,23 +588,104 @@ function disposeGroup(g){
   });
 }
 
+/* ---------- Lentes curvos ----------
+   Los lentes reales no son planos: tienen una curva base (aquí curva ~5, radio 10 cm). Se generan con
+   anillos desde el centro hasta el contorno, así el reflejo del entorno cambia a lo largo del lente. */
+const LENS_RADIUS = 10 / 14;   // en unidades de montura (curva base ~5)
+function makeLensGeometry(outline, plane = { a: 0, b: 0, d: 0 }){
+  let pts = outline.map(p => [p[0], p[1]]);
+  let area = 0;
+  for (let i = 0; i < pts.length; i++){ const a = pts[i], b = pts[(i + 1) % pts.length]; area += a[0] * b[1] - b[0] * a[1]; }
+  if (area < 0) pts.reverse();
+  const n = pts.length, rings = 12;
+  let cx = 0, cy = 0; for (const p of pts){ cx += p[0] / n; cy += p[1] / n; }
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of pts){ minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]); minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]); }
+  const pos = [], uv = [], nor = [], idx = [];
+  // casquete esférico: z = plano + (r² máx − r²) / 2R  → el centro queda unos mm delante, los bordes sobre el plano
+  let rmax2 = 0; for (const p of pts) rmax2 = Math.max(rmax2, (p[0] - cx) ** 2 + (p[1] - cy) ** 2);
+  const add = (x, y) => {
+    const dx = x - cx, dy = y - cy;
+    pos.push(x, y, plane.a * x + plane.b * y + plane.d + (rmax2 - dx * dx - dy * dy) / (2 * LENS_RADIUS));
+    const nx = -plane.a + dx / LENS_RADIUS, ny = -plane.b + dy / LENS_RADIUS, nl = Math.hypot(nx, ny, 1);
+    nor.push(nx / nl, ny / nl, 1 / nl);
+    uv.push((x - minX) / (maxX - minX), (y - minY) / (maxY - minY));
+  };
+  add(cx, cy);
+  for (let r = 1; r <= rings; r++){
+    const t = r / rings;
+    for (const p of pts) add(cx + t * (p[0] - cx), cy + t * (p[1] - cy));
+  }
+  for (let i = 0; i < n; i++) idx.push(0, 1 + i, 1 + (i + 1) % n);
+  for (let r = 1; r < rings; r++){
+    const a0 = 1 + (r - 1) * n, b0 = 1 + r * n;
+    for (let i = 0; i < n; i++){
+      const i1 = (i + 1) % n;
+      idx.push(a0 + i, b0 + i, b0 + i1, a0 + i, b0 + i1, a0 + i1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setIndex(idx);
+  return g;
+}
+// Textura del tinte (permite degradados): la comparten todos los lentes
+const lensCanvas = document.createElement('canvas'); lensCanvas.width = 4; lensCanvas.height = 128;
+const lensTex = new THREE.CanvasTexture(lensCanvas); lensTex.colorSpace = THREE.SRGBColorSpace;
+function makeLensMaterial(){
+  const m = new THREE.MeshPhysicalMaterial({
+    color: '#ffffff', map: lensTex, metalness: 0, roughness: 0.03,
+    transmission: 1, thickness: 0, ior: 1.5,
+    specularIntensity: 1, specularColor: new THREE.Color('#ffffff'),
+    iridescence: 0, iridescenceIOR: 1.6, iridescenceThicknessRange: [260, 320],
+    envMapIntensity: 1.6, side: THREE.FrontSide,
+  });
+  lensMats.push(m);
+  return m;
+}
+
 /* ---------- Estado visual del lente ---------- */
-const _white = new THREE.Color('#ffffff'), _yellow = new THREE.Color('#fff2c2');
+const _c1 = new THREE.Color(), _c2 = new THREE.Color(), _white = new THREE.Color('#ffffff');
+function lerpLv(lv, L){ return L <= 0.5 ? lv[0] + (lv[1] - lv[0]) * (L / 0.5) : lv[1] + (lv[2] - lv[1]) * ((L - 0.5) / 0.5); }
+function lensTint(L){
+  const tr = TR_BY[state.trType], col = tr.colores[state.trColor] || tr.colores[0];
+  if (col.estados){   // Drivewear: cambia de color, no solo de intensidad
+    const [a, b, c] = col.estados.map(h => new THREE.Color(h));
+    return L <= 0.5 ? a.lerp(b, L / 0.5) : b.lerp(c, (L - 0.5) / 0.5);
+  }
+  return _white.clone().lerp(new THREE.Color(col.hex), lerpLv(tr.lv, L));
+}
+function lightName(L){ return L < 0.15 ? 'Interior' : L < 0.35 ? 'Nublado' : L < 0.65 ? 'En el carro' : L < 0.85 ? 'Sol' : 'Sol directo'; }
 function updateLens(){
-  const t = state.tint;
-  const base = state.blue ? _yellow : _white;
-  const col = base.clone().lerp(new THREE.Color(TINTS[state.tintColor].hex), t);
-  const op = 0.05 + (state.blue ? 0.07 : 0) + t * 0.76;
-  for (const m of lensMats){ m.color.copy(col); m.opacity = op; }
-  let gcol = '#ffffff', gop = 0.55;
-  if (state.ar){ gcol = state.blue ? '#9aa8ff' : '#8dffa6'; gop = 0.09; }
-  else if (state.blue){ gcol = '#c2ccff'; gop = 0.55; }
-  for (const m of glareMats){ m.color.set(gcol); m.opacity = gop * (m.userData.k || 1); }
-  const pct = Math.round(t * 100);
-  document.getElementById('tintValue').textContent =
-    (pct < 8 ? 'Interior' : pct < 45 ? 'Nublado' : pct < 80 ? 'Sol' : 'Sol directo') + ' · ' + pct + '%';
+  const L = state.tint, tr = TR_BY[state.trType];
+  const top = lensTint(L);
+  if (state.blue) top.multiply(_c2.set('#fff4d6'));             // filtro de luz azul: leve tono ámbar
+  // degradado (Color Touch): arriba el tono completo, abajo un 25 %
+  const bottom = tr.acabados && state.degradado ? _white.clone().lerp(top, 0.25) : top.clone();
+  const g = lensCanvas.getContext('2d'), grd = g.createLinearGradient(0, 0, 0, lensCanvas.height);
+  grd.addColorStop(0, '#' + top.getHexString()); grd.addColorStop(0.15, '#' + top.getHexString());
+  grd.addColorStop(0.85, '#' + bottom.getHexString()); grd.addColorStop(1, '#' + bottom.getHexString());
+  g.fillStyle = grd; g.fillRect(0, 0, lensCanvas.width, lensCanvas.height);
+  lensTex.needsUpdate = true;
+
+  // reflejos: antirreflejo (verde suave), luz azul (reflejo azulado), espejados (XTRActive)
+  const act = tr.id === 'claro' ? 0 : lerpLv(tr.lv, L);
+  const mir = tr.espejos && state.mirror ? tr.espejos[state.mirror] : null;
+  for (const m of lensMats){
+    m.map = lensTex;
+    m.ior = 1.5; m.specularIntensity = 1; m.specularColor.set('#ffffff'); m.iridescence = 0;
+    // antirreflejo: casi sin reflejo, solo un brillo residual verdoso (o azulado si también tiene filtro de luz azul)
+    if (state.ar){ m.specularIntensity = 0.16; m.specularColor.set(state.blue ? '#8fb0ff' : '#8dffa8'); }
+    else if (state.blue){ m.specularColor.set('#a9bcff'); }
+    if (mir){ m.ior = 1.5 + 1.8 * (0.35 + 0.65 * act); m.specularColor.set(mir.hex); m.specularIntensity = 1; m.iridescence = 0; }
+    m.needsUpdate = true;
+  }
+  document.getElementById('tintValue').textContent = tr.id === 'claro' ? 'Lente claro' : `${lightName(L)} · ${Math.round(act * 100)} %`;
   const slider = document.getElementById('tint');
-  if (document.activeElement !== slider) slider.value = pct;
+  if (document.activeElement !== slider) slider.value = Math.round(L * 100);
+  document.querySelectorAll('#trLight .chip').forEach(c => c.setAttribute('aria-pressed', String(Math.abs(+c.dataset.l - state.tintTarget) < 0.01)));
 }
 
 /* =========================================================
@@ -591,6 +701,36 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 const scene = new THREE.Scene();
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+// HDRI: reemplaza el entorno de estudio cuando carga (reflejos reales en lentes y monturas)
+// Paneles de luz (dirección desde la cabeza, tamaño, intensidad): techo al frente y una ventana a un lado
+const LIGHT_PANELS = [
+  { dir: [0, 0.16, 1], w: 16, h: 3.2, i: 6 },       // panel del techo, frente a la persona
+  { dir: [-0.62, 0.05, 1], w: 3.4, h: 10, i: 4.5 },  // ventanas y vitrinas a los lados
+  { dir: [0.62, 0.08, 1], w: 3.0, h: 9, i: 3.5 },
+  { dir: [-1.25, 0.15, 1], w: 3.0, h: 8, i: 3 },
+  { dir: [1.25, 0.12, 1], w: 3.0, h: 8, i: 3 },
+  { dir: [0, 0.65, 1], w: 12, h: 2.2, i: 4 },        // otra fila de luces del techo
+];
+async function loadEnvironment(path = 'recursos/entorno.hdr'){
+  try {
+    const buf = await getAsset(path);
+    const url = URL.createObjectURL(new Blob([buf]));
+    const hdr = await new RGBELoader().loadAsync(url);
+    URL.revokeObjectURL(url);
+    // El HDRI como fondo, más paneles de luz como los de una óptica: dan los reflejos que se ven en los lentes
+    const envScene = new THREE.Scene();
+    hdr.colorSpace = THREE.LinearSRGBColorSpace;
+    envScene.add(new THREE.Mesh(new THREE.SphereGeometry(50, 64, 32), new THREE.MeshBasicMaterial({ map: hdr, side: THREE.BackSide })));
+    for (const pnl of LIGHT_PANELS){
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(pnl.w, pnl.h), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.98, 0.95).multiplyScalar(pnl.i * 0.8), side: THREE.DoubleSide }));
+      m.position.set(...pnl.dir).normalize().multiplyScalar(20); m.lookAt(0, 0, 0);
+      envScene.add(m);
+    }
+    const env = pmrem.fromScene(envScene, 0.025).texture;
+    hdr.dispose();
+    scene.environment = env;
+  } catch (e){ console.warn('Sin HDRI, se usa el entorno de estudio', e); }
+}
 scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 const dir = new THREE.DirectionalLight(0xffffff, 1.4); dir.position.set(0.4, 1, 1.2); scene.add(dir);
 
@@ -981,33 +1121,43 @@ function prepareModel(root, def){
   holder.scale.setScalar(k);
   holder.updateMatrixWorld(true);
 
-  // Lentes: marcar y preparar una copia con coordenadas UV planas para el reflejo
+  // Lentes: se reemplazan por lentes curvos generados desde el contorno de los del modelo (uno por lado)
   const inv = holder.matrixWorld.clone().invert();
-  const side = { r: new THREE.Box3(), l: new THREE.Box3() };
   const v = new THREE.Vector3();
-  const local = m => { const M = inv.clone().multiply(m.matrixWorld); return M; };
+  const sidePts = { 1: [], '-1': [] };
   for (const m of lens){
-    const M = local(m), pos = m.geometry.attributes.position;
-    for (let i = 0; i < pos.count; i++){ v.fromBufferAttribute(pos, i).applyMatrix4(M); (v.x >= 0 ? side.r : side.l).expandByPoint(v); }
+    const pos = m.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++){ v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld); sidePts[v.x >= 0 ? 1 : -1].push(v.x, v.y, v.z); }
   }
-  for (const m of lens){
-    m.userData.esLente = true;
-    const M = local(m), pos = m.geometry.attributes.position;
-    const uv = new Float32Array(pos.count * 2);
-    for (let i = 0; i < pos.count; i++){
-      v.fromBufferAttribute(pos, i).applyMatrix4(M);
-      const b = v.x >= 0 ? side.r : side.l;
-      uv[i * 2] = (v.x - b.min.x) / Math.max(1e-6, b.max.x - b.min.x);
-      uv[i * 2 + 1] = (v.y - b.min.y) / Math.max(1e-6, b.max.y - b.min.y);
+  for (const m of lens) m.removeFromParent();
+  const newLens = [];
+  for (const side of [1, -1]){
+    const P3 = sidePts[side]; if (P3.length < 9) continue;
+    const N = P3.length / 3;
+    let cx = 0, cy = 0; for (let i = 0; i < P3.length; i += 3){ cx += P3[i] / N; cy += P3[i + 1] / N; }
+    // contorno: el punto más lejano del centro en cada dirección
+    const BINS = 120, rad = new Float32Array(BINS);
+    for (let i = 0; i < P3.length; i += 3){
+      const dx = P3[i] - cx, dy = P3[i + 1] - cy, ang = Math.atan2(dy, dx);
+      const bIdx = Math.floor(((ang + Math.PI) / (2 * Math.PI)) * BINS) % BINS;
+      rad[bIdx] = Math.max(rad[bIdx], Math.hypot(dx, dy));
     }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', pos);
-    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    if (m.geometry.index) g.setIndex(m.geometry.index);
-    const glare = new THREE.Mesh(g, m.material);
-    glare.userData.esReflejo = true;
-    m.add(glare);
+    for (let k = 0; k < BINS; k++) if (!rad[k]){ let l = k, r = k; while (!rad[(l + BINS - 1) % BINS] && l > k - BINS) l--; while (!rad[(r + 1) % BINS] && r < k + BINS) r++; rad[k] = (rad[(l + BINS - 1) % BINS] + rad[(r + 1) % BINS]) / 2; }
+    const outline = [];
+    for (let k = 0; k < BINS; k++){ const ang = -Math.PI + (k + 0.5) / BINS * 2 * Math.PI; outline.push([cx + rad[k] * Math.cos(ang), cy + rad[k] * Math.sin(ang)]); }
+    // plano medio de los lentes del modelo (respeta la curvatura frontal de la montura)
+    let sxx = 0, sxy = 0, syy = 0, sx = 0, sy = 0, sz = 0, sxz = 0, syz = 0;
+    for (let i = 0; i < P3.length; i += 3){ const x = P3[i] - cx, y = P3[i + 1] - cy, z = P3[i + 2]; sxx += x*x; sxy += x*y; syy += y*y; sx += x; sy += y; sz += z; sxz += x*z; syz += y*z; }
+    const det = sxx * syy - sxy * sxy;
+    const a2 = det ? (sxz * syy - syz * sxy) / det : 0, b2 = det ? (syz * sxx - sxz * sxy) / det : 0;
+    const plane = { a: a2, b: b2, d: sz / N - a2 * cx - b2 * cy };
+    const lm = new THREE.Mesh(makeLensGeometry(outline, plane), new THREE.MeshBasicMaterial());
+    lm.userData.esLente = true;
+    lm.scale.setScalar(1 / k);   // la geometría ya está en unidades de montura; holder vuelve a escalar por k
+    holder.add(lm);
+    newLens.push(lm);
   }
+  lens.length = 0; lens.push(...newLens);
 
   // Separar cada pieza en frente (aros, puente, bisagras) y patillas, para que el frente nunca lo corte la cara
   holder.updateMatrixWorld(true);
@@ -1072,8 +1222,7 @@ function instantiateGLB(def, tpl, col){
       gm.userData.k = 0.45; // los lentes 3D tienen cara frontal y trasera: el reflejo se ve doble
       o.material = gm; o.renderOrder = 3; glareMats.push(gm);
     } else if (o.userData.esLente){
-      const lm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.06, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
-      o.material = lm; o.renderOrder = 2; lensMats.push(lm);
+      o.material = makeLensMaterial();
     } else {
       o.material = Array.isArray(o.material) ? o.material.map(cloneMat) : cloneMat(o.material);
     }
@@ -1105,6 +1254,8 @@ async function renderGLBThumb(def, card){
     const obj = instantiateGLB(def, tpl, def.colores[0]);
     lensMats = saveL; glareMats = saveG;
     obj.rotation.y = 0.32;
+    // en la miniatura los lentes van casi transparentes (no hay fondo que se vea a través)
+    obj.traverse(o => { if (o.isMesh && o.userData.esLente) o.material = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.1 }); });
     thumbScene.add(obj);
     r.setClearColor(0x000000, 0);
     r.render(thumbScene, thumbCam);
@@ -1154,6 +1305,22 @@ const smoothQ = new THREE.Quaternion(); let haveQ = false;
 let lostFrames = 0;
 // Medidas de la cara de la persona (en cm de la cabeza), promediadas en el tiempo
 const fit = { pupilY: null, noseZ: null };
+/* Modelo personal: durante el primer segundo con la persona de frente se promedia la forma real de su cara.
+   Desde ahí la pose se calcula contra SU cara y no contra una cara promedio: menos error y menos temblor. */
+const personal = { acc: new Float64Array(468 * 3), n: 0, model: null, need: 30 };
+function resetPersonal(){ personal.acc.fill(0); personal.n = 0; personal.model = null; }
+function poseResidual(f, ref){
+  let e = 0;
+  for (const i of POSE_IDX){
+    let d2 = 0;
+    for (let r = 0; r < 3; r++){
+      const v = f.s * (f.R[r*3] * ref[i*3] + f.R[r*3+1] * ref[i*3+1] + f.R[r*3+2] * ref[i*3+2]) + f.t[r] - live[i*3+r];
+      d2 += v * v;
+    }
+    e += Math.sqrt(d2);
+  }
+  return e / POSE_IDX.length / f.s;   // cm
+}
 function resetTracking(){
   fPos.forEach(f => f.reset()); fScale.reset(); fRot.forEach(f => f.reset());
   haveQ = false; fit.pupilY = fit.noseZ = null; HEAD.ratio = 1;
@@ -1173,7 +1340,21 @@ function ema(prev, v, a){ return prev == null ? v : prev + (v - prev) * a; }
 function track(lm, tSec){
   const n = Math.min(478, lm.length);
   for (let i = 0; i < n; i++){ live[i * 3] = lm[i].x * vw; live[i * 3 + 1] = (1 - lm[i].y) * vh; live[i * 3 + 2] = -lm[i].z * vw; }
-  const f = fitPose(live);
+  const ref = personal.model || CANON_V;
+  const f = fitPose(live, ref);
+  // Calibración: con la cabeza de frente, acumular la forma de la cara en cm de la cabeza
+  if (!personal.model){
+    const yaw = Math.atan2(f.R[2], f.R[8]), pitch = Math.asin(-f.R[5]);
+    if (Math.abs(yaw) < 0.3 && Math.abs(pitch) < 0.3){
+      for (let i = 0; i < 468; i++){ const h = toHead(f, i); personal.acc[i*3] += h[0]; personal.acc[i*3+1] += h[1]; personal.acc[i*3+2] += h[2]; }
+      if (++personal.n >= personal.need){
+        const m = new Float32Array(468 * 3);
+        for (let k = 0; k < m.length; k++) m[k] = personal.acc[k] / personal.n;
+        personal.model = m;
+      }
+    }
+  }
+  if (state.debug) state.residual = poseResidual(f, ref);
 
   // Rotación filtrada (componentes del cuaternión, sin saltos de signo)
   _q.set(f.q[0], f.q[1], f.q[2], f.q[3]);
@@ -1233,6 +1414,7 @@ async function initLandmarker(){
       delegate,
     },
     runningMode: 'VIDEO', numFaces: 1,
+    minFaceDetectionConfidence: 0.6, minFacePresenceConfidence: 0.6, minTrackingConfidence: 0.6,
   });
   try { landmarker = await FaceLandmarker.createFromOptions(fileset, opts('GPU')); }
   catch (e){ console.warn('GPU no disponible, usando CPU', e); landmarker = await FaceLandmarker.createFromOptions(fileset, opts('CPU')); }
@@ -1243,7 +1425,7 @@ async function initCamera(){
     throw Object.assign(new Error('insecure'), { name: 'Insecure' });
   }
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false,
+    video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }, audio: false,
   });
   video.srcObject = stream;
   await video.play();
@@ -1267,6 +1449,7 @@ function loop(){
     const res = landmarker.detectForVideo(video, now);
     if (res.faceLandmarks && res.faceLandmarks.length){
       if (lostFrames > 8) resetTracking();
+      if (lostFrames > 60) resetPersonal();   // más de 2 s sin cara: puede ser otra persona
       lostFrames = 0;
       track(res.faceLandmarks[0], now / 1000);
       anchor.visible = true;
@@ -1279,7 +1462,7 @@ function loop(){
 
   // Animación Transitions (comprimida para la demo: en la vida real tarda ~30 s)
   if (state.tint !== state.tintTarget){
-    const rate = state.tintTarget > state.tint ? 0.45 : 0.3;
+    const rate = state.tintTarget > state.tint ? 0.4 : 0.3;   // por segundo
     const d = state.tintTarget - state.tint;
     state.tint += Math.sign(d) * Math.min(Math.abs(d), rate * dt);
     updateLens();
@@ -1289,7 +1472,9 @@ function loop(){
   if (state.debug){
     const P = state.lastPose, R = P && P.R;
     const pose = R ? `\ngiro ${(Math.atan2(R[2], R[8]) * 57.3).toFixed(0)}° · inclin. ${(Math.asin(-R[5]) * 57.3).toFixed(0)}° · ${P.s.toFixed(1)} px/cm` : '';
-    debugEl.textContent = `MODO AJUSTE\nfps ${fps.toFixed(0)} · video ${vw}×${vh}${pose}\nescala ${state.fitScale.toFixed(2)}  (+/−)\naltura ${state.fitOffY.toFixed(1)} cm  (W/S)\nprofundidad ${state.fitOffZ.toFixed(1)} cm  (Q/E)\noclusores ${state.showOcc ? 'visibles' : 'ocultos'}  (O)\nmontura ←/→${modelInfo()}`;
+    const cal = personal.model ? 'cara calibrada' : `calibrando ${personal.n}/${personal.need}`;
+    const res = state.residual != null ? ` · error ${(state.residual * 10).toFixed(1)} mm` : '';
+    debugEl.textContent = `MODO AJUSTE\nfps ${fps.toFixed(0)} · video ${vw}×${vh}${pose}\n${cal}${res}\nescala ${state.fitScale.toFixed(2)}  (+/−)\naltura ${state.fitOffY.toFixed(1)} cm  (W/S)\nprofundidad ${state.fitOffZ.toFixed(1)} cm  (Q/E)\noclusores ${state.showOcc ? 'visibles' : 'ocultos'}  (O)\nmontura ←/→${modelInfo()}`;
   }
   renderer.render(scene, camera);
 }
@@ -1367,37 +1552,43 @@ function renderFrameUI(){
   card.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
 }
 
+function chip(label, pressed, onClick, dotHex){
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'chip small';
+  if (dotHex){ const d = document.createElement('span'); d.className = 'dot'; d.style.background = dotHex; b.append(d); }
+  b.append(label);
+  b.setAttribute('aria-pressed', String(pressed));
+  b.addEventListener('click', onClick);
+  return b;
+}
 function buildTintUI(){
-  const wrap = document.getElementById('tintChips');
-  wrap.innerHTML = '';
-  for (const [key, t] of Object.entries(TINTS)){
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'chip'; b.id = 'tintc-' + key;
-    b.innerHTML = `<span class="dot" style="background:${t.hex}"></span>`;
-    b.append(t.n);
-    b.setAttribute('aria-pressed', String(state.tintColor === key));
-    b.addEventListener('click', () => {
-      state.tintColor = key;
-      document.documentElement.style.setProperty('--tint-dark', t.hex);
-      wrap.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', String(c === b)));
-      if (state.tint < 0.15 && !state.sun){ state.tintTarget = 0.85; setSun(true); }
-      updateLens();
-    });
-    wrap.append(b);
+  const tr = TR_BY[state.trType];
+  const types = document.getElementById('trTypes'); types.innerHTML = '';
+  for (const t of TR) types.append(chip(t.n, t.id === state.trType, () => {
+    state.trType = t.id; state.trColor = 0; state.mirror = 0;
+    // al elegir un tipo con color, mostrarlo activado
+    if (t.id !== 'claro' && state.tintTarget < 0.5){ state.tintTarget = 1; }
+    buildTintUI(); updateLens();
+  }));
+  document.getElementById('trDesc').textContent = tr.desc;
+  const cols = document.getElementById('trColors'); cols.innerHTML = '';
+  if (tr.colores.length > 1) tr.colores.forEach((c, i) => cols.append(chip(c.n, i === state.trColor, () => {
+    state.trColor = i; if (state.tintTarget < 0.5) state.tintTarget = 1; buildTintUI(); updateLens();
+  }, c.hex)));
+  const extra = document.getElementById('trExtra'); extra.innerHTML = '';
+  if (tr.acabados){
+    extra.append(chip('Degradado', state.degradado, () => { state.degradado = true; buildTintUI(); updateLens(); }));
+    extra.append(chip('Uniforme', !state.degradado, () => { state.degradado = false; buildTintUI(); updateLens(); }));
   }
+  if (tr.espejos) tr.espejos.forEach((e, i) => extra.append(chip(e.n, i === state.mirror, () => { state.mirror = i; buildTintUI(); updateLens(); }, e.hex)));
+  document.getElementById('trLight').hidden = tr.id === 'claro';
+  document.getElementById('tint').hidden = tr.id === 'claro';
+  document.querySelector('.range-ends').hidden = tr.id === 'claro';
 }
-
-const btnSun = document.getElementById('btnSun');
-function setSun(on){
-  state.sun = on;
-  btnSun.setAttribute('aria-pressed', String(on));
-  btnSun.textContent = on ? 'Volver a interior' : 'Salir al sol';
-}
-btnSun.addEventListener('click', () => { setSun(!state.sun); state.tintTarget = state.sun ? 1 : 0; });
+document.querySelectorAll('#trLight .chip').forEach(c => c.addEventListener('click', () => { state.tintTarget = +c.dataset.l; updateLens(); }));
 
 document.getElementById('tint').addEventListener('input', e => {
   state.tint = state.tintTarget = e.target.value / 100;
-  setSun(state.tint > 0.5);
   updateLens();
 });
 
@@ -1430,7 +1621,9 @@ document.getElementById('btnPhoto').addEventListener('click', () => {
   g.fillStyle = '#eef1f2'; g.font = `600 ${fs}px Sora, sans-serif`;
   g.fillText(`${def.nombre} · ${col.n}`, pad, out.height - fs * 1.75);
   g.fillStyle = '#d6a15a'; g.font = `500 ${Math.round(fs * 0.7)}px Manrope, sans-serif`;
-  const lens = [state.tint > 0.05 ? `Transitions ${TINTS[state.tintColor].n}` : null, state.ar ? 'Antirreflejo' : null, state.blue ? 'Luz azul' : null].filter(Boolean).join(' · ');
+  const trd = TR_BY[state.trType], trc = trd.colores[state.trColor] || trd.colores[0];
+  const mirN = trd.espejos && state.mirror ? ' espejo ' + trd.espejos[state.mirror].n.toLowerCase() : '';
+  const lens = [trd.id !== 'claro' ? `Transitions ${trd.n}${trc.n !== trd.n ? ' ' + trc.n : ''}${mirN}` : null, state.ar ? 'Antirreflejo' : null, state.blue ? 'Luz azul' : null].filter(Boolean).join(' · ');
   g.fillText(`${def.medidas} · ${def.ref}${lens ? ' · ' + lens : ''}`, pad, out.height - fs * 0.75);
   const url = out.toDataURL('image/png');
   document.getElementById('photoImg').src = url;
@@ -1509,6 +1702,7 @@ document.getElementById('fileGlb').addEventListener('change', async e => {
 buildFramesUI();
 buildTintUI();
 loadHead();
+loadEnvironment();
 setFrame(0, 0);
 fitCamera();
 
@@ -1539,7 +1733,7 @@ btnStart.addEventListener('click', async () => {
 });
 
 // Acceso para pruebas desde la consola del navegador
-window.__probador = { FILT, fPos, fRot, fScale, THREE, renderer, camera, scene, videoMesh, state, anchor, skull, faceOcc, glasses, fit, HEAD, get headOcc(){ return headOcc; }, get current(){ return current; } };
+window.__probador = { loadEnvironment, personal, updateLens, buildTintUI, FILT, fPos, fRot, fScale, THREE, renderer, camera, scene, videoMesh, state, anchor, skull, faceOcc, glasses, fit, HEAD, get headOcc(){ return headOcc; }, get current(){ return current; } };
 
 requestAnimationFrame(loop);
 </script>

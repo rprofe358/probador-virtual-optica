@@ -95,8 +95,8 @@ function renderFrameUI(){
     swatchesEl.append(s);
   });
   $('colorName').textContent = col.n;
-  $('nowName').textContent = def.nombre + ' · ' + col.n;
-  $('nowInfo').textContent = def.estilo + ' · ' + def.medidas;
+  const label = def.nombre + ' · ' + col.n;
+  if ($('nowName').textContent !== label){ $('nowName').textContent = label; flashNow(); }
   if (screen === 'app') $('frame-' + def.id)?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
   dialRefresh();
 }
@@ -142,24 +142,44 @@ function bindToggle(id, key){
 bindToggle('tgAR', 'ar');
 bindToggle('tgBlue', 'blue');
 
-/* ---------- Pestañas del probador ---------- */
-const rail = $('rail'), sheet = $('sheet');
-let tabOpen = 'monturas';
-function openTab(name, toggle = true){
-  if (toggle && tabOpen === name && !sheet.classList.contains('closed')){
-    sheet.classList.add('closed'); tabOpen = null;
-  } else {
-    tabOpen = name; sheet.classList.remove('closed');
-    sheet.querySelectorAll('.tab').forEach(t => t.hidden = t.dataset.tab !== name);
-    sheet.scrollTop = 0;
-  }
-  rail.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tabOpen)));
+/* ---------- Etiqueta pasajera con la montura actual ---------- */
+let nowTimer = 0;
+function flashNow(ms = 2600){
+  if (screen !== 'app') return;
+  const el = $('nowPill'); el.classList.add('show');
+  clearTimeout(nowTimer); nowTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
-rail.querySelectorAll('button').forEach(b => b.addEventListener('click', () => openTab(b.dataset.tab)));
 
-/* ---------- Foto ---------- */
-const modal = $('modal');
-$('btnPhoto').addEventListener('click', () => {
+/* ---------- Barra inferior + panel compacto ----------
+   El panel solo aparece al tocar una pestaña y se esconde solo (tocar la cámara o 10 s sin tocarlo),
+   para que la cara quede libre casi todo el tiempo. */
+const dock = $('dock'), sheet = $('sheet');
+const SHEET_IDLE_MS = 10000;
+let tabOpen = null, sheetTimer = 0;
+function armSheetTimer(){ clearTimeout(sheetTimer); if (tabOpen) sheetTimer = setTimeout(closeSheet, SHEET_IDLE_MS); }
+function closeSheet(){
+  clearTimeout(sheetTimer); tabOpen = null; sheet.classList.add('closed');
+  dock.querySelectorAll('.tabbtn').forEach(b => b.setAttribute('aria-selected', 'false'));
+}
+function openTab(name, toggle = true){
+  if (!name || (toggle && tabOpen === name)) return closeSheet();
+  tabOpen = name; sheet.classList.remove('closed');
+  sheet.querySelectorAll('.tab').forEach(t => t.hidden = t.dataset.tab !== name);
+  sheet.scrollTop = 0;
+  dock.querySelectorAll('.tabbtn').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tabOpen)));
+  if (name === 'monturas') $('frame-' + FRAMES[state.frame].id)?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  armSheetTimer();
+}
+dock.querySelectorAll('.tabbtn').forEach(b => b.addEventListener('click', () => openTab(b.dataset.tab)));
+['pointerdown', 'scroll', 'input'].forEach(ev => sheet.addEventListener(ev, armSheetTimer, { capture: true, passive: true }));
+$('stage').addEventListener('pointerdown', () => { if (tabOpen) closeSheet(); });
+
+/* ---------- Foto con cuenta regresiva 3-2-1 ----------
+   El obturador (o la mano en ✌️) arranca la cuenta; mientras tanto se esconde toda la interfaz
+   para que la persona pose y la foto salga limpia. */
+const modal = $('modal'), appEl = $('app'), cdEl = $('countdown');
+let countdownOn = false, photoTimer = 0;
+function takePhoto(){
   renderer.render(scene, camera);
   const src = renderer.domElement;
   const out = document.createElement('canvas');
@@ -186,9 +206,28 @@ $('btnPhoto').addEventListener('click', () => {
   save.href = url; save.download = `probador-${def.id}.png`;
   const fl = $('flash');
   fl.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => fl.classList.remove('on')));
-  setTimeout(() => { modal.hidden = false; }, 250);
-});
-$('btnClose').addEventListener('click', () => { modal.hidden = true; });
+  setTimeout(() => { modal.hidden = false; clearTimeout(photoTimer); photoTimer = setTimeout(closePhoto, 20000); }, 250);
+}
+function startCountdown(){
+  if (countdownOn || screen !== 'app' || !modal.hidden) return;
+  countdownOn = true; closeSheet(); releaseGrab();
+  appEl.classList.add('posing'); lastActivity = performance.now();
+  let n = 3;
+  const show = () => { cdEl.hidden = false; cdEl.innerHTML = `<b>${n}</b>`; };
+  show();
+  const iv = setInterval(() => {
+    n--;
+    if (n > 0) return show();
+    clearInterval(iv); cdEl.hidden = true;
+    takePhoto();
+    appEl.classList.remove('posing'); countdownOn = false;
+  }, 1000);
+}
+function closePhoto(){ clearTimeout(photoTimer); modal.hidden = true; lastActivity = performance.now(); }
+$('btnPhoto').addEventListener('click', startCountdown);
+$('btnClose').addEventListener('click', closePhoto);
+$('btnRetake').addEventListener('click', () => { closePhoto(); setTimeout(startCountdown, 200); });
+$('btnSave').addEventListener('click', () => { clearTimeout(photoTimer); photoTimer = setTimeout(closePhoto, 20000); });
 
 /* =========================================================
    ENTRADA: lentes flotando en un estudio
@@ -351,7 +390,7 @@ async function startCamera(){
     btn.disabled = false; label.textContent = 'Probármelos';
   }
 }
-async function goApp(tab = 'monturas'){
+async function goApp(tab = null){
   if (starting) return;
   starting = true;
   try {
@@ -363,11 +402,12 @@ async function goApp(tab = 'monturas'){
     screen = 'app';
     requestAnimationFrame(() => requestAnimationFrame(() => app.classList.remove('entering')));
     setTimeout(() => { introEl.hidden = true; introEl.classList.remove('leaving'); }, 650);
-    openTab(tab, false);
+    if (tab) openTab(tab, false); else closeSheet();
     fitCamera();
+    setTimeout(() => flashNow(3200), 500);
     lastActivity = performance.now();
     // la primera vez, recordar que existe el dial con la mano
-    if (!goApp.tipShown){ goApp.tipShown = true; setTimeout(() => { if (screen === 'app' && G.on) toast('Junta el pulgar y el índice y gira la mano para usar el dial', 6000); }, 2500); }
+    if (!goApp.tipShown){ goApp.tipShown = true; setTimeout(() => { if (screen === 'app' && G.on) toast('Pellizca y gira la mano para el dial · ✌️ para la foto', 6000); }, 2500); }
   } finally { starting = false; }
 }
 function goHome(){
@@ -377,7 +417,7 @@ function goHome(){
   introEl.hidden = false; introEl.classList.add('entering');
   requestAnimationFrame(() => requestAnimationFrame(() => introEl.classList.remove('entering')));
   $('app').hidden = true;
-  modal.hidden = true;
+  closePhoto(); closeSheet();
   if (introIdx !== state.frame || !introObj) showIntroFrame(state.frame, 1);
   fitIntro(); startIntroLoop();
 }
@@ -394,19 +434,26 @@ setInterval(() => { if (screen === 'app' && modal.hidden && performance.now() - 
    DIAL CON GESTOS DE LA MANO
    Pellizco (pulgar + índice) = tomar la perilla. Girar la mano = cambiar el valor. Mano abierta 1 s = cambiar qué controla.
    ========================================================= */
-let handLm = null, handFrame = 0;
-const G = { on: true, ready: false, param: 0, pinch: false, pinchT: 0, grabbed: false, grabAng: 0, grabVal: 0, palmT: 0, lastHand: 0,
-            ang: 0, rawPrev: null, angF: new OneEuro(1.6, 0.6), pos: { x: 0, y: 0 }, shownUntil: 0 };
+let handLm = null, handFrame = 0, handVideoT = -1;
+const G = { on: true, ready: false, param: 0,
+            pinch: false, pinchIn: 0, pinchOut: 0, pinchT: 0, grabbed: false, grabAng: 0, grabVal: 0,
+            palmT: 0, peaceT: 0, peaceCool: 0, lastHand: 0,
+            ang: 0, rawPrev: null, angF: new OneEuro(1.0, 0.3),
+            pos: { x: 0, y: 0 },        // centro del pellizco (destino)
+            cur: { x: 0, y: 0, t: null },   // cursor dibujado (se interpola a 60 fps)
+            target: 0, disp: 0,         // valor del dial: destino y lo que se dibuja
+            delta: 0, dispDelta: 0, pending: -1, pendingT: 0, dirty: true, shownUntil: 0 };
 const LENS_OPTS = TR.flatMap(t => t.colores.map((c, ci) => ({ type: t.id, color: ci, n: t.id === 'claro' ? 'Sin Transitions' : (c.n === t.n ? t.n : `${t.n} · ${c.n}`) })));
 const DIAL = [
   { id: 'luz', n: 'Oscuridad del lente', kind: 'cont', short: 'Oscuridad',
-    get: () => state.tintTarget, set: v => { state.tint = state.tintTarget = v; updateLens(); },
+    get: () => state.tintTarget, set: v => { state.tintTarget = v; },   // el lente la alcanza suave en el bucle
     label: () => TR_BY[state.trType].id === 'claro' ? 'Lente claro' : lightName(state.tint) },
   { id: 'color', n: 'Color de la montura', kind: 'disc', short: 'Color',
-    count: () => FRAMES[state.frame].colores.length, get: () => state.color, set: i => setFrame(state.frame, i),
+    count: () => FRAMES[state.frame].colores.length, get: () => state.color, set: i => setFrame(state.frame, i),   // se repinta en el sitio
     label: () => FRAMES[state.frame].colores[state.color].n },
   { id: 'montura', n: 'Montura', kind: 'disc', short: 'Montura',
-    count: () => FRAMES.length, get: () => state.frame, set: i => setFrame(i, 0), label: () => FRAMES[state.frame].nombre },
+    count: () => FRAMES.length, get: () => state.frame, set: i => setFrame(i, 0), label: () => FRAMES[state.frame].nombre,
+    labelOf: i => FRAMES[i].nombre, heavy: true },   // cambiar de montura arma otro modelo: se aplica al detenerse
   { id: 'lente', n: 'Color del lente', kind: 'disc', short: 'Lente',
     count: () => LENS_OPTS.length,
     get: () => Math.max(0, LENS_OPTS.findIndex(o => o.type === state.trType && o.color === state.trColor)),
@@ -414,7 +461,9 @@ const DIAL = [
                 if (o.type !== 'claro' && state.tintTarget < 0.5) state.tintTarget = 1; buildTintUI(); updateLens(); },
     label: () => LENS_OPTS[Math.max(0, LENS_OPTS.findIndex(o => o.type === state.trType && o.color === state.trColor))].n },
 ];
-const STEP = THREE.MathUtils.degToRad(24);   // un paso del dial cada 24° de giro
+const STEP = THREE.MathUtils.degToRad(22);   // un paso del dial cada 22° de giro
+const DEAD = THREE.MathUtils.degToRad(3);    // zona muerta: el temblor de la mano no mueve nada
+const DWELL_MS = 350;                        // la montura cambia cuando el dial se queda quieto este tiempo
 
 async function initHands(){
   try {
@@ -437,7 +486,7 @@ function updateDialPill(){
 }
 $('btnDial').addEventListener('click', () => {
   if (state.debug){ G.on = !G.on; updateDialPill(); toast(G.on ? 'Gestos activados' : 'Gestos desactivados', 1600); return; }
-  nextParam(true);
+  $('gestureHelp').hidden = false;   // tocar «Gestos» explica cómo se usan
 });
 function nextParam(fromTap){
   G.param = (G.param + 1) % DIAL.length;
@@ -463,9 +512,18 @@ function isOpenPalm(lm){
   const spread = Math.hypot(lm[8].x - lm[20].x, lm[8].y - lm[20].y) > size * 0.75;
   return fingers && thumbOut && spread;
 }
+function fingerUp(lm, tip, pip){ const w = lm[0]; return Math.hypot(lm[tip].x - w.x, lm[tip].y - w.y) > Math.hypot(lm[pip].x - w.x, lm[pip].y - w.y) * 1.12; }
+function isPeace(lm){   // ✌️ índice y medio arriba y separados, anular y meñique doblados
+  const w = lm[0], size = Math.hypot(lm[9].x - w.x, lm[9].y - w.y);
+  return fingerUp(lm, 8, 6) && fingerUp(lm, 12, 10) && !fingerUp(lm, 16, 14) && !fingerUp(lm, 20, 18)
+      && Math.hypot(lm[8].x - lm[12].x, lm[8].y - lm[12].y) > size * 0.35;
+}
 function gestureTick(now){
-  if (!G.on || !handLm || screen !== 'app' || !vw) return;
-  if (++handFrame % 2) return;                  // la mano se analiza un cuadro sí y uno no
+  if (!G.on || !handLm || screen !== 'app' || !vw || countdownOn || !modal.hidden) return;
+  // analizar la mano en cada cuadro nuevo de la cámara; si el equipo va justo (< 24 fps), uno sí y uno no
+  if (video.currentTime === handVideoT) return;
+  handVideoT = video.currentTime;
+  if (fps < 24 && (++handFrame % 2)) return;
   let res;
   try { res = handLm.detectForVideo(video, now); } catch (e){ return; }
   handStep(res, now);
@@ -474,8 +532,9 @@ function handStep(res, now){
   const lm = res && res.landmarks && res.landmarks[0];
   const cursor = $('handCursor');
   if (!lm){
-    if (now - G.lastHand > 350){ releaseGrab(); cursor.classList.remove('on'); }
+    if (now - G.lastHand > 350){ releaseGrab(); cursor.classList.remove('on'); G.cur.t = null; G.rawPrev = null; }
     if (now > G.shownUntil && !G.grabbed) $('dial').classList.remove('on');
+    G.peaceT = 0; G.palmT = 0;
     return;
   }
   G.lastHand = now; lastActivity = now;
@@ -483,86 +542,139 @@ function handStep(res, now){
   const p0 = P(0), p4 = P(4), p8 = P(8), p9 = P(9);
   const size = Math.max(1, dist2(p0, p9));
   const pd = dist2(p4, p8) / size;
-  const pinching = G.pinch ? pd < 0.5 : pd < 0.3;
   const mid = { x: (p4.x + p8.x) / 2, y: (p4.y + p8.y) / 2 };
   // ángulo de la mano (muñeca → nudillo del medio), continuo y suavizado
   const raw = Math.atan2(p9.y - p0.y, p9.x - p0.x);
-  if (G.rawPrev == null) G.ang = raw;
+  if (G.rawPrev == null){ G.ang = raw; G.angF = new OneEuro(1.0, 0.3); }
   else { let d = raw - G.rawPrev; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; G.ang += d; }
   G.rawPrev = raw;
   const ang = G.angF.filter(G.ang, now / 1000);
 
-  cursor.classList.add('on'); cursor.classList.toggle('pinch', pinching);
-  const cp = pinching ? mid : p8;
-  cursor.style.left = cp.x + 'px'; cursor.style.top = cp.y + 'px';
-  G.pos = mid;
+  // pellizco con histéresis y confirmación: 2 cuadros para empezar, 3 para soltar (evita parpadeos)
+  const closeNow = G.pinch ? pd < 0.5 : pd < 0.3;
+  if (closeNow){ G.pinchIn++; G.pinchOut = 0; } else { G.pinchOut++; G.pinchIn = 0; }
+  if (!G.pinch && G.pinchIn >= 2){ G.pinch = true; G.pinchT = now; }
+  if (G.pinch && G.pinchOut >= 3){ G.pinch = false; releaseGrab(); }
 
-  if (pinching && !G.pinch){ G.pinch = true; G.pinchT = now; }
-  if (!pinching && G.pinch){ G.pinch = false; releaseGrab(); }
-  if (G.pinch && !G.grabbed && now - G.pinchT > 160){
+  cursor.classList.add('on'); cursor.classList.toggle('pinch', G.pinch);
+  G.pos = G.pinch ? mid : p8;
+  if (G.cur.t == null){ G.cur.x = G.pos.x; G.cur.y = G.pos.y; G.cur.t = now; }
+
+  if (G.pinch && !G.grabbed && now - G.pinchT > 120){
     const p = DIAL[G.param];
-    G.grabbed = true; G.grabAng = ang; G.grabVal = p.get();
+    G.grabbed = true; G.grabAng = ang; G.grabVal = p.get(); G.target = G.disp = G.grabVal; G.delta = G.dispDelta = 0; G.pending = -1;
     showDial(mid.x, mid.y);
   }
   if (G.grabbed){
-    const p = DIAL[G.param], delta = ang - G.grabAng;
+    const p = DIAL[G.param];
+    let delta = ang - G.grabAng;
+    delta = Math.sign(delta) * Math.max(0, Math.abs(delta) - DEAD);
+    G.delta = delta;
     if (p.kind === 'cont'){
-      const v = THREE.MathUtils.clamp(G.grabVal + delta / (Math.PI * 0.7), 0, 1);
-      if (Math.abs(v - p.get()) > 0.004) p.set(v);
+      G.target = THREE.MathUtils.clamp(G.grabVal + delta / (Math.PI * 0.7), 0, 1);
+      if (Math.abs(G.target - p.get()) > 0.002) p.set(G.target);
     } else {
-      const n = p.count(), idx = (((G.grabVal + Math.round(delta / STEP)) % n) + n) % n;
-      if (idx !== p.get()){ p.set(idx); pulseDial(); }
+      const n = p.count();
+      G.target = G.grabVal + delta / STEP;                // valor continuo: los ticks giran suave
+      const idx = ((Math.round(G.target) % n) + n) % n;
+      if (p.heavy){
+        if (idx !== G.pending){ G.pending = idx; G.pendingT = now; if (idx !== p.get()) pulseDial(); }
+        else if (idx !== p.get() && now - G.pendingT > DWELL_MS) p.set(idx);
+      } else if (idx !== p.get()){ p.set(idx); pulseDial(); }
     }
-    dialRefresh(delta);
+    G.dirty = true;
   }
   // mano abierta un momento: cambiar lo que controla el dial
-  if (!G.pinch && isOpenPalm(lm)){
+  const open = !G.pinch && isOpenPalm(lm);
+  if (open){
     if (!G.palmT) G.palmT = now;
     else if (now - G.palmT > 900){ G.palmT = now + 1e6; nextParam(false); }
-  } else if (G.palmT && G.palmT < now + 1e5) G.palmT = 0;
-  else if (!isOpenPalm(lm)) G.palmT = 0;
+  } else G.palmT = 0;
+  // ✌️ sostenido medio segundo: foto con cuenta regresiva
+  if (!G.pinch && !open && isPeace(lm) && now > G.peaceCool){
+    if (!G.peaceT) G.peaceT = now;
+    else if (now - G.peaceT > 500){ G.peaceT = 0; G.peaceCool = now + 6000; startCountdown(); }
+  } else G.peaceT = 0;
 }
 function releaseGrab(){
-  if (G.grabbed){ G.grabbed = false; G.shownUntil = performance.now() + 900; setTimeout(() => { if (!G.grabbed && performance.now() >= G.shownUntil) $('dial').classList.remove('on'); }, 950); }
+  if (!G.grabbed) return;
+  const p = DIAL[G.param];
+  if (p.heavy && G.pending >= 0 && G.pending !== p.get()) p.set(G.pending);   // al soltar se aplica la montura elegida
+  G.grabbed = false; G.pending = -1; G.dirty = true;
+  G.target = p.kind === 'cont' ? p.get() : p.get();
+  G.shownUntil = performance.now() + 900;
+  setTimeout(() => { if (!G.grabbed && performance.now() >= G.shownUntil) $('dial').classList.remove('on'); }, 950);
 }
 function showDial(x, y, ms){
   const d = $('dial'), app = $('app'), r = d.offsetWidth / 2 || 140;
   const W = app.clientWidth, H = app.clientHeight;
-  const railW = $('rail').offsetWidth + 28;   // sin tapar el riel de la derecha
-  d.style.left = THREE.MathUtils.clamp(x, r + 12, W - r - railW) + 'px';
-  d.style.top = THREE.MathUtils.clamp(y, r + 80, H - r - 12) + 'px';
+  const dockTop = $('dock').getBoundingClientRect().top - app.getBoundingClientRect().top;
+  d.style.left = THREE.MathUtils.clamp(x, r + 12, W - r - 12) + 'px';
+  d.style.top = THREE.MathUtils.clamp(y, r + 80, Math.max(r + 80, dockTop - r - 12)) + 'px';
   d.classList.add('on');
-  dialRefresh(0);
+  if (!G.grabbed){ const p = DIAL[G.param]; G.target = G.disp = p.get(); }
+  G.dirty = true; drawDial();
   if (ms){ G.shownUntil = performance.now() + ms; setTimeout(() => { if (!G.grabbed && performance.now() >= G.shownUntil) d.classList.remove('on'); }, ms + 50); }
 }
-function pulseDial(){ const d = $('dial'); d.animate([{ transform: 'translate(-50%,-50%) scale(1.06)' }, { transform: 'translate(-50%,-50%) scale(1)' }], { duration: 180 }); }
-function dialRefresh(delta = 0){
+function pulseDial(){ const d = $('dial'); d.animate([{ transform: 'translate(-50%,-50%) scale(1.05)' }, { transform: 'translate(-50%,-50%) scale(1)' }], { duration: 160 }); }
+// el motor llama esto cuando cambia algo: solo marca para redibujar en el próximo cuadro
+function dialRefresh(){ G.dirty = true; }
+
+// Animación a 60 fps, independiente de la detección: cursor y dial se deslizan hacia su destino
+let gPrevT = performance.now();
+function gestureAnim(now){
+  requestAnimationFrame(gestureAnim);
+  const dt = Math.min(0.1, (now - gPrevT) / 1000); gPrevT = now;
+  if (screen !== 'app') return;
+  const k = 1 - Math.exp(-dt * 18);            // ~55 ms de retraso: suave pero pegado a la mano
+  if (G.cur.t != null){
+    G.cur.x += (G.pos.x - G.cur.x) * k; G.cur.y += (G.pos.y - G.cur.y) * k;
+    const c = $('handCursor'); c.style.transform = `translate(${G.cur.x}px,${G.cur.y}px) translate(-50%,-50%)`;
+  }
+  const dial = $('dial');
+  if (!dial.classList.contains('on')) return;
+  const p = DIAL[G.param];
+  if (!G.grabbed) G.target = p.kind === 'cont' ? p.get() : (G.pending >= 0 ? G.pending : p.get());
+  const kd = 1 - Math.exp(-dt * 16);
+  const dv = G.target - G.disp, dd = (G.grabbed ? G.delta : 0) - G.dispDelta;
+  if (Math.abs(dv) > 1e-4 || Math.abs(dd) > 1e-4 || G.dirty){
+    G.disp += dv * kd; G.dispDelta += dd * kd;
+    if (Math.abs(dv) < 1e-4) G.disp = G.target;
+    G.dirty = false; drawDial();
+  }
+}
+requestAnimationFrame(gestureAnim);
+
+function drawDial(){
   const p = DIAL[G.param], svg = $('dialSvg');
   if (!svg) return;
   $('dialParam').textContent = p.n;
-  $('dialValue').textContent = p.label();
+  $('dialValue').textContent = p.kind === 'cont' ? p.label() : (p.labelOf && G.pending >= 0 ? p.labelOf(G.pending) : p.label());
   $('dialHint').textContent = G.grabbed ? 'Suelta para dejarlo así' : 'Pellizca y gira la mano';
   const R = 86, parts = [];
   parts.push(`<circle r="${R}" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="10"/>`);
   if (p.kind === 'cont'){
-    // arco de -135° a +135°
-    const a0 = -225, a1 = 45, v = p.get(), av = a0 + (a1 - a0) * v;
+    const a0 = -225, a1 = 45, v = THREE.MathUtils.clamp(G.disp, 0, 1), av = a0 + (a1 - a0) * v;
     const pt = a => [R * Math.cos(a * Math.PI / 180), R * Math.sin(a * Math.PI / 180)];
     const [x0, y0] = pt(a0), [x1, y1] = pt(av), [xe, ye] = pt(a1);
     parts.push(`<path d="M${x0} ${y0} A${R} ${R} 0 1 1 ${xe} ${ye}" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="10" stroke-linecap="round"/>`);
-    parts.push(`<path d="M${x0} ${y0} A${R} ${R} 0 ${av - a0 > 180 ? 1 : 0} 1 ${x1} ${y1}" fill="none" stroke="url(#dialGrad)" stroke-width="10" stroke-linecap="round"/>`);
+    if (v > 0.002) parts.push(`<path d="M${x0} ${y0} A${R} ${R} 0 ${av - a0 > 180 ? 1 : 0} 1 ${x1} ${y1}" fill="none" stroke="url(#dialGrad)" stroke-width="10" stroke-linecap="round"/>`);
     parts.push(`<circle cx="${x1}" cy="${y1}" r="9" fill="#fff"/>`);
   } else {
-    const n = p.count(), cur = p.get();
+    // los ticks giran con el valor continuo; el de arriba es el elegido
+    const n = p.count(), sp = 360 / Math.max(n, 12), half = n / 2;
+    const cur = ((Math.round(G.disp) % n) + n) % n;
     for (let i = 0; i < n; i++){
-      const a = (-90 + (i - cur) * (360 / Math.max(n, 12))) * Math.PI / 180;
-      const on = i === cur, r0 = on ? R - 14 : R - 8, r1 = on ? R + 8 : R + 2;
-      parts.push(`<line x1="${r0 * Math.cos(a)}" y1="${r0 * Math.sin(a)}" x2="${r1 * Math.cos(a)}" y2="${r1 * Math.sin(a)}" stroke="${on ? '#fff' : 'rgba(255,255,255,.55)'}" stroke-width="${on ? 5 : 2.5}" stroke-linecap="round"/>`);
+      let off = i - G.disp; off = ((off % n) + n) % n; if (off >= half) off -= n;
+      const a = (-90 + off * sp) * Math.PI / 180;
+      const on = i === cur, fade = n > 12 ? 1 : Math.max(0.15, 1 - Math.abs(off) / (half + 0.5));
+      const r0 = on ? R - 14 : R - 8, r1 = on ? R + 8 : R + 2;
+      parts.push(`<line x1="${r0 * Math.cos(a)}" y1="${r0 * Math.sin(a)}" x2="${r1 * Math.cos(a)}" y2="${r1 * Math.sin(a)}" stroke="${on ? '#fff' : 'rgba(255,255,255,.6)'}" stroke-opacity="${on ? 1 : fade.toFixed(2)}" stroke-width="${on ? 5 : 2.5}" stroke-linecap="round"/>`);
     }
+    parts.push(`<path d="M-7 ${-R - 22} L7 ${-R - 22} L0 ${-R - 12} Z" fill="#fff"/>`);   // marca fija arriba
   }
-  // indicador del giro de la mano
   if (G.grabbed){   // marca del giro de la mano, sobre el borde exterior
-    const a = -90 * Math.PI / 180 + delta;
+    const a = -Math.PI / 2 + G.dispDelta;
     parts.push(`<circle cx="${(R + 16) * Math.cos(a)}" cy="${(R + 16) * Math.sin(a)}" r="6" fill="#fff" stroke="rgba(0,0,0,.25)"/>`);
   }
   svg.innerHTML = `<defs><linearGradient id="dialGrad" x1="0" x2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#9fb8ff"/><stop offset="1" stop-color="#3a3f4a"/></linearGradient></defs>${parts.join('')}`;

@@ -1,0 +1,1792 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Probador Virtual Óptica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap">
+<style>
+/* Layout: cámara a pantalla completa + panel de control (abajo en vertical, a la derecha en horizontal). Look oscuro único, tipo kiosco. */
+:root{
+  --ink:#0e1113;
+  --panel:#15191c;
+  --raise:#1d2226;
+  --line:#2a3136;
+  --text:#eef1f2;
+  --muted:#97a1a7;
+  --carey:#d6a15a;
+  --carey-ink:#1c1308;
+  --font-display:'Sora', 'Segoe UI', system-ui, sans-serif;
+  --font-body:'Manrope', 'Segoe UI', system-ui, sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--ink);color:var(--text);font-family:var(--font-body);font-size:15px;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--carey);outline-offset:2px}
+
+#app{height:100dvh;display:grid;grid-template-rows:minmax(0,1fr) auto}
+@media (orientation:landscape) and (min-width:900px){
+  #app{grid-template-columns:minmax(0,1fr) 390px;grid-template-rows:minmax(0,1fr)}
+}
+
+/* ---------- Escenario ---------- */
+.stage{position:relative;overflow:hidden;background:#000;min-height:0}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;transform:scaleX(-1)}
+.topbar{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:calc(14px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 14px max(16px,env(safe-area-inset-left,0px));
+  background:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,0));pointer-events:none}
+.brand{display:flex;flex-direction:column;gap:2px;pointer-events:auto;user-select:none;-webkit-user-select:none}
+.brand b{font-family:var(--font-display);font-size:17px;letter-spacing:.02em}
+.brand span{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--carey)}
+.top-actions{display:flex;gap:8px;pointer-events:auto}
+.icon-btn{border:1px solid rgba(255,255,255,.18);background:rgba(14,17,19,.55);backdrop-filter:blur(8px);border-radius:999px;padding:9px 14px;font-size:13px;font-weight:600}
+.hint{position:absolute;left:50%;top:22%;transform:translateX(-50%);background:rgba(14,17,19,.72);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.14);
+  padding:10px 18px;border-radius:999px;font-weight:600;font-size:14px;white-space:nowrap}
+.shutter{position:absolute;right:max(18px,env(safe-area-inset-right,0px));bottom:18px;width:68px;height:68px;border-radius:50%;
+  border:3px solid #fff;background:rgba(255,255,255,.18);display:grid;place-items:center}
+.shutter::after{content:"";width:50px;height:50px;border-radius:50%;background:#fff;transition:transform .15s}
+.shutter:active::after{transform:scale(.88)}
+.shutter span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.now{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:20px;background:rgba(14,17,19,.68);backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:10px 14px;display:flex;flex-direction:column;gap:2px;max-width:60%}
+.now b{font-family:var(--font-display);font-size:16px}
+.now span{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .35s}
+.flash.on{opacity:.85;transition:none}
+.debug{position:absolute;left:12px;top:70px;background:rgba(0,0,0,.7);font:12px/1.5 ui-monospace,Consolas,monospace;padding:8px 10px;border-radius:8px;white-space:pre}
+
+/* ---------- Panel ---------- */
+.panel{background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column;gap:18px;overflow-y:auto;max-height:48dvh;
+  padding-block:16px calc(16px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+@media (orientation:landscape) and (min-width:900px){
+  .panel{border-top:0;border-left:1px solid var(--line);max-height:none;padding-top:22px}
+}
+.sec{display:flex;flex-direction:column;gap:10px}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.label{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.value{font-size:13px;color:var(--text);font-variant-numeric:tabular-nums}
+
+.frames{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x proximity}
+@media (orientation:landscape) and (min-width:900px){ .frames{display:grid;grid-template-columns:1fr 1fr;overflow:visible} }
+.frame-card{flex:0 0 140px;scroll-snap-align:start;border:1.5px solid var(--line);background:var(--raise);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:6px;text-align:left}
+.frame-card canvas{width:100%;height:52px;display:block}
+.frame-card b{font-family:var(--font-display);font-size:14px;font-weight:600}
+.frame-card small{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.frame-card[aria-pressed="true"]{border-color:var(--carey);background:#241e17}
+
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.swatch{width:40px;height:40px;border-radius:50%;border:2px solid var(--line);padding:0;position:relative}
+.swatch[aria-pressed="true"]{border-color:var(--carey);box-shadow:0 0 0 3px var(--panel) inset}
+.swatch-name{font-size:13px;color:var(--muted)}
+
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:30px;background:transparent}
+input[type=range]::-webkit-slider-runnable-track{height:10px;border-radius:99px;background:linear-gradient(90deg,#e9eef0,var(--tint-dark,#3a3d40));border:1px solid var(--line)}
+input[type=range]::-moz-range-track{height:10px;border-radius:99px;background:linear-gradient(90deg,#e9eef0,var(--tint-dark,#3a3d40));border:1px solid var(--line)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--carey);border:3px solid var(--panel);margin-top:-9px}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--carey);border:3px solid var(--panel)}
+.range-ends{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:-4px}
+.tr-desc{margin:0;font-size:12.5px;line-height:1.45;color:var(--muted)}
+.chip.small{padding:7px 11px;font-size:12.5px}
+
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1.5px solid var(--line);background:var(--raise);border-radius:999px;padding:9px 14px;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:8px}
+.chip[aria-pressed="true"]{border-color:var(--carey);color:var(--carey)}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+.sun{background:var(--carey);color:var(--carey-ink);border-color:var(--carey)}
+.sun[aria-pressed="true"]{background:var(--raise);color:var(--carey)}
+
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1.5px solid var(--line);background:var(--raise);border-radius:14px;padding:12px 14px;text-align:left;width:100%}
+.toggle div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.toggle b{font-size:14px}
+.toggle small{font-size:12px;color:var(--muted)}
+.switch{flex:0 0 42px;height:24px;border-radius:99px;background:var(--line);position:relative;transition:background .2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s}
+.toggle[aria-pressed="true"] .switch{background:var(--carey)}
+.toggle[aria-pressed="true"] .switch::after{transform:translateX(18px)}
+.toggles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media (max-width:420px){ .toggles{grid-template-columns:1fr} }
+
+/* ---------- Pantalla de inicio ---------- */
+.start{position:fixed;inset:0;z-index:20;background:radial-gradient(120% 80% at 50% 20%,#1b2024,var(--ink));display:grid;place-items:center;
+  padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.start-inner{max-width:520px;display:flex;flex-direction:column;align-items:center;gap:22px;text-align:center}
+.start svg{width:min(320px,80vw);height:auto}
+.start h1{font-family:var(--font-display);font-size:clamp(30px,6vw,46px);line-height:1.08;margin:0;text-wrap:balance}
+.start p{margin:0;color:var(--muted);line-height:1.55;max-width:42ch}
+.cta{background:var(--carey);color:var(--carey-ink);border:0;border-radius:999px;padding:16px 34px;font-family:var(--font-display);font-size:18px;font-weight:600}
+.cta:disabled{opacity:.6;cursor:progress}
+.status{font-size:14px;color:var(--muted);min-height:1.4em}
+.status.err{color:#ff9b8a;max-width:46ch;line-height:1.5}
+.measure{font-variant-numeric:tabular-nums;font-size:12px;letter-spacing:.12em;color:var(--carey)}
+
+/* ---------- Foto ---------- */
+.modal{position:fixed;inset:0;z-index:30;background:rgba(5,7,8,.86);display:grid;place-items:center;
+  padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.modal-card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:14px;max-width:min(560px,100%);max-height:100%}
+.modal-card img{border-radius:10px;max-height:70dvh;object-fit:contain;background:#000}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.btn{border:1.5px solid var(--line);background:var(--raise);border-radius:999px;padding:11px 18px;font-weight:600;text-decoration:none;color:var(--text)}
+.btn.primary{background:var(--carey);border-color:var(--carey);color:var(--carey-ink)}
+
+.upload{align-self:flex-start;cursor:pointer;border-style:dashed;color:var(--muted)}
+.upload:hover{color:var(--text)}
+.frame-card img{width:100%;height:52px;object-fit:contain;display:block}
+.frame-card .ph{height:52px;display:grid;place-items:center;font-size:11px;color:var(--muted)}
+.credits{margin:0;font-size:11px;line-height:1.5;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;
+  background:var(--raise);border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:14px;max-width:min(460px,calc(100vw - 32px))}
+
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+
+<div id="app">
+  <section class="stage" id="stage">
+    <canvas id="gl"></canvas>
+    <div class="topbar">
+      <div class="brand" id="brand"><span>Probador virtual</span><b>Tu Óptica</b></div>
+      <div class="top-actions">
+        <button class="icon-btn" id="btnFull" type="button">Pantalla completa</button>
+      </div>
+    </div>
+    <div class="hint" id="hint" hidden>Mira de frente a la cámara</div>
+    <div class="now" id="now"><b id="nowName">—</b><span id="nowInfo">—</span></div>
+    <button class="shutter" id="btnPhoto" type="button" aria-label="Tomar foto"><span>Tomar foto</span></button>
+    <div class="flash" id="flash"></div>
+    <div class="debug" id="debug" hidden></div>
+  </section>
+
+  <aside class="panel" aria-label="Opciones">
+    <div class="sec">
+      <div class="sec-head"><span class="label">Monturas</span><span class="value" id="frameCount"></span></div>
+      <div class="frames" id="frames"></div>
+      <label class="chip upload" for="fileGlb" id="uploadChip" hidden>Probar un modelo propio (.glb)</label>
+      <input type="file" id="fileGlb" accept=".glb,model/gltf-binary" hidden>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><span class="label">Color de montura</span><span class="swatch-name" id="colorName"></span></div>
+      <div class="swatches" id="swatches"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><span class="label">Transitions</span><span class="value" id="tintValue">Interior</span></div>
+      <div class="row" id="trTypes"></div>
+      <p class="tr-desc" id="trDesc"></p>
+      <div class="row" id="trColors"></div>
+      <div class="row" id="trExtra"></div>
+      <div class="row" id="trLight">
+        <button class="chip" type="button" data-l="0">Interior</button>
+        <button class="chip" type="button" data-l="0.5">En el carro</button>
+        <button class="chip" type="button" data-l="1">Al sol</button>
+      </div>
+      <input type="range" id="tint" min="0" max="100" value="0" aria-label="Cantidad de luz">
+      <div class="range-ends"><span>Interior</span><span>Carro</span><span>Sol directo</span></div>
+    </div>
+
+    <div class="sec">
+      <span class="label">Tratamientos</span>
+      <div class="toggles">
+        <button class="toggle" id="tgAR" type="button" aria-pressed="false">
+          <div><b>Antirreflejo</b><small>Quita los brillos del lente</small></div><span class="switch"></span>
+        </button>
+        <button class="toggle" id="tgBlue" type="button" aria-pressed="false">
+          <div><b>Filtro luz azul</b><small>Para pantallas y celular</small></div><span class="switch"></span>
+        </button>
+      </div>
+    </div>
+
+    <p class="credits">Modelos 3D de prueba (Sketchfab, licencia CC BY 4.0, adaptados): «Anteojos» de Orking, «Glasses» de AlbertVictory y «Glasses» de C.U.V. Cabeza para oclusión: «Male Head» de Alexander Antipov (CC BY 4.0). Malla facial: MediaPipe (Apache 2.0).</p>
+  </aside>
+</div>
+
+<div class="start" id="start">
+  <div class="start-inner">
+    <svg viewBox="0 0 320 120" aria-hidden="true">
+      <g fill="none" stroke="#d6a15a" stroke-width="5" stroke-linejoin="round">
+        <path d="M30 40 Q30 28 44 28 H128 Q140 28 139 42 L134 74 Q130 94 108 94 H62 Q38 94 34 76 Z"/>
+        <path d="M290 40 Q290 28 276 28 H192 Q180 28 181 42 L186 74 Q190 94 212 94 H258 Q282 94 286 76 Z"/>
+        <path d="M139 44 Q160 32 181 44"/>
+      </g>
+      <text x="160" y="116" text-anchor="middle" fill="#97a1a7" font-size="11" letter-spacing="2" font-family="Manrope, sans-serif">52 □ 18 · 145</text>
+    </svg>
+    <h1>Pruébate tus lentes antes de llevarlos</h1>
+    <p>Cambia de montura, mira cómo se oscurece un lente Transitions al sol y compara tratamientos, todo en tiempo real con la cámara.</p>
+    <button class="cta" id="btnStart" type="button">Empezar</button>
+    <div class="status" id="status"></div>
+  </div>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-card">
+    <img id="photoImg" alt="Foto con la montura puesta">
+    <div class="modal-actions">
+      <button class="btn" id="btnClose" type="button">Cerrar</button>
+      <a class="btn primary" id="btnSave" download="probador.png" href="#">Guardar foto</a>
+    </div>
+  </div>
+</div>
+
+<!--MODELOS_EMBEBIDOS-->
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+  // Si los módulos no cargan (sin internet en la primera carga), avisar.
+  setTimeout(function(){
+    if(!window.__probadorListo){
+      var s=document.getElementById('status');
+      s.className='status err';
+      s.textContent='No se pudieron cargar las librerías. Esta versión de prueba necesita internet la primera vez que se abre.';
+    }
+  },15000);
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { FaceLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
+
+window.__probadorListo = true;
+
+// Malla canónica de MediaPipe (468 puntos, en cm) y sus 898 triángulos. Licencia Apache 2.0.
+const CANON_V = new Float32Array([0,-3.41,5.98,0,-1.13,7.48,0,-2.09,6.06,-0.46,0.96,6.63,0,-0.46,7.59,0,0.37,7.24,0,2.47,5.79,-4.25,2.58,3.28,0,4.02,5.28,0,4.89,5.39,0,8.26,4.48,0,-3.71,5.86,0,-3.92,5.57,0,-3.99,5.22,0,-4.54,5.4,0,-4.75,5.53,0,-5.02,5.6,0,-5.37,5.54,0,-6.15,5.07,0,-1.5,7.11,-0.42,-1.47,6.45,-7.09,5.43,0.1,-2.63,2.04,3.85,-3.2,1.99,3.8,-3.78,2.04,3.65,-4.47,2.42,3.16,-2.16,2.19,3.85,-3.21,3.22,4.12,-2.67,3.21,4.09,-3.75,3.17,3.97,-4.16,3.06,3.72,-5.06,1.93,2.78,-2.27,-7.43,4.39,-4.45,2.66,3.17,-7.21,2.26,0.07,-5.8,2.35,2.2,-2.84,-0.72,4.43,-0.71,-3.33,5.88,-0.61,-3.92,5.44,-1.43,-3.5,5.5,-1.91,-3.8,5.03,-1.13,-3.97,5.19,-1.56,-4.08,4.84,-2.65,-5,4.19,-0.43,-1.09,7.36,-0.5,-0.48,7.44,-5.25,3.88,3.36,-1.72,0.97,4.56,-1.61,-0.94,5.81,-1.65,-0.61,5.58,-4.77,-0.7,3.53,-0.48,0.3,7.1,-3.73,4.51,4.55,-4.59,4.3,4.05,-6.28,6.62,1.43,-1.22,4.14,5.11,-2.19,3.1,4,-3.1,-4.35,4.1,-6.72,-4.79,-1.75,-1.19,-1.31,5.74,-0.73,-1.59,5.83,-2.46,-4.34,4.28,-2.2,-4.3,4.16,-4.99,4.8,3.75,-1.59,-1.26,5.46,-2.64,4.52,4.92,-2.76,5.1,5.02,-3.52,8.01,3.73,-5.6,5.72,2.72,-3.06,6.57,4.53,-5.72,4.25,2.83,-6.37,4.79,1.59,-0.67,-3.69,5.74,-1.26,-3.79,5.42,-1.73,-3.95,5,-1.04,-1.46,5.66,-2.32,-4.33,4.26,-2.06,-4.48,4.52,-2.15,-4.28,4.04,-0.95,-1.04,6.51,-1.47,-4.04,4.6,-1.02,-3.99,4.93,-0.53,-3.99,5.14,-0.77,-6.1,4.99,-0.7,-5.29,5.45,-0.67,-4.95,5.51,-0.63,-4.7,5.45,-0.58,-4.52,5.34,-1.54,-4.42,4.75,-1.62,-4.48,4.81,-1.73,-4.62,4.85,-1.84,-4.83,4.82,-2.37,-3.11,4.87,-7.54,-1.05,-2.43,0,-1.72,6.6,-1.83,-4.4,4.4,-1.93,-4.41,4.5,-0.6,-2.01,5.87,-1.41,-1.71,5.24,-0.66,-1.82,5.86,-2.34,0.57,4.29,-3.33,0.1,4.11,-1.73,-0.92,5.27,-5.13,7.49,2.66,-4.54,6.32,3.68,-3.99,5.11,4.47,-2.17,-5.44,4.46,-1.4,5.01,5.32,-1.62,6.6,4.92,-1.89,8.24,4.27,-4.2,2.24,3.38,-5.73,1.41,2.43,-1.86,2.36,3.84,-4.99,3.07,3.08,-1.3,1.42,4.83,-1.31,-0.67,6.42,-6.47,0.94,1.69,-5.26,0.95,2.97,-4.43,0.72,3.52,-3.3,0.86,3.87,-2.43,1.13,4.04,-1.82,1.47,4.22,-0.56,2.31,5.57,-6.34,-0.53,1.88,-5.59,3.21,2.69,-0.24,-1.46,7.07,-1.61,0.34,4.9,-7.74,2.36,-2.01,-1.39,1.85,4.45,-1.79,-0.98,4.85,-4.67,2.66,3.08,-1.33,-0.28,6.1,-7.27,-2.89,-2.25,-1.86,2.59,3.76,-0.92,0.07,6.67,-5,-6.14,1.89,-5.09,-7.18,0.71,-7.16,-0.81,-0.07,-5.84,-5.25,0.92,-6.85,3.66,0.72,-2.41,-8.26,4.12,-0.18,-1.69,6.57,-2.1,-0.16,4.57,-6.41,2.24,1.56,-3.67,2.36,3.64,-3.18,2.29,3.78,-2.2,-4.6,4.48,-6.23,-1.94,1.66,-1.29,-9.3,4.09,-3.21,-8.53,2.8,-4.07,-7.99,1.93,0,6.55,5.03,0,-9.4,4.26,-2.72,2.32,3.78,-2.29,2.4,3.7,-2,2.5,3.69,-6.13,3.4,2.04,-2.29,2.89,3.78,-2.72,2.96,3.87,-3.18,2.96,3.88,-3.67,2.93,3.72,-4.02,2.86,3.48,-7.56,4.11,-0.99,-4.02,2.48,3.44,0,-2.52,5.93,-1.78,-2.68,5.21,-1.22,-1.18,5.95,-0.73,-2.54,5.82,0,3.27,5.24,-4.14,-7,2.67,-3.31,-7.66,3.38,-1.31,-8.64,4.7,-5.94,-6.22,-0.63,-2,2.74,3.74,-0.9,1.24,5.75,0,-8.77,4.89,-2.31,-8.97,3.61,-6.95,-2.44,-0.13,-1.1,-4.46,5.12,-1.18,-4.58,5.19,-1.26,-4.79,5.24,-1.33,-5.11,5.21,-1.55,-5.82,4.76,-1.95,-4.18,4.43,-2.12,-4.14,4.56,-2.29,-4.05,4.58,-2.85,-3.67,4.48,-5.28,-2.24,2.86,-0.95,1.91,5.2,-1.31,3.1,4.23,-1.78,2.86,3.88,-1.85,-4.1,4.25,-5.44,-4.03,2.11,-0.77,3.18,4.86,-1.94,-6.61,4.52,0,1.06,6.77,-0.52,1.58,6.15,0,1.73,6.32,-1.25,0.23,5.68,0,-7.94,5.18,0,-6.99,5.15,-1,-6.93,4.98,-3.29,-5.38,3.8,-2.31,-1.57,4.59,-2.68,-6.11,4.1,-3.83,-1.54,4.14,-2.96,-2.27,4.44,-4.39,-2.68,3.64,-1.22,-7.83,4.97,-1.54,-0.14,5.2,-3.88,-6.04,3.31,-3.08,-6.81,3.81,-3.75,-4.5,3.73,-6.09,-3.21,1.47,-4.59,-4.73,2.98,-6.58,-3.94,0.07,-3.49,-3.2,4.13,-1.26,0.8,5.31,-1.13,-0.93,6.54,-1.44,-1.14,5.91,-0.92,-0.53,7,-1.76,3.53,4.33,-2.63,3.71,4.36,-3.39,3.72,4.31,-4.08,3.68,4.08,-4.62,3.47,3.65,-5.17,2.54,2.67,-7.3,0.76,-0.05,-4.71,1.65,3.11,-4.07,1.48,3.48,-3.27,1.47,3.73,-2.53,1.62,3.87,-1.97,1.86,3.96,-1.58,2.1,4.08,-7.66,0.67,-2.44,-1.4,-1.34,5.63,-0.88,0.66,6.23,-0.77,-0.97,7.08,-0.46,-1.33,6.79,-0.75,-1.07,6.8,-1.24,-1.59,5.48,-0.39,-1.41,6.96,-0.32,-1.61,6.51,-1.64,2.56,3.86,-1.26,2.47,4.2,-1.03,2.38,4.62,-4.25,2.77,3.32,-4.53,2.91,3.34,0.46,0.96,6.63,4.25,2.58,3.28,0.42,-1.47,6.45,7.09,5.43,0.1,2.63,2.04,3.85,3.2,1.99,3.8,3.78,2.04,3.65,4.47,2.42,3.16,2.16,2.19,3.85,3.21,3.22,4.12,2.67,3.21,4.09,3.75,3.17,3.97,4.16,3.06,3.72,5.06,1.93,2.78,2.27,-7.43,4.39,4.45,2.66,3.17,7.21,2.26,0.07,5.8,2.35,2.2,2.84,-0.72,4.43,0.71,-3.33,5.88,0.61,-3.92,5.44,1.43,-3.5,5.5,1.91,-3.8,5.03,1.13,-3.97,5.19,1.56,-4.08,4.84,2.65,-5,4.19,0.43,-1.09,7.36,0.5,-0.48,7.44,5.25,3.88,3.36,1.72,0.97,4.56,1.61,-0.94,5.81,1.65,-0.61,5.58,4.77,-0.7,3.53,0.48,0.3,7.1,3.73,4.51,4.55,4.59,4.3,4.05,6.28,6.62,1.43,1.22,4.14,5.11,2.19,3.1,4,3.1,-4.35,4.1,6.72,-4.79,-1.75,1.19,-1.31,5.74,0.73,-1.59,5.83,2.46,-4.34,4.28,2.2,-4.3,4.16,4.99,4.8,3.75,1.59,-1.26,5.46,2.64,4.52,4.92,2.76,5.1,5.02,3.52,8.01,3.73,5.6,5.72,2.72,3.06,6.57,4.53,5.72,4.25,2.83,6.37,4.79,1.59,0.67,-3.69,5.74,1.26,-3.79,5.42,1.73,-3.95,5,1.04,-1.46,5.66,2.32,-4.33,4.26,2.06,-4.48,4.52,2.15,-4.28,4.04,0.95,-1.04,6.51,1.47,-4.04,4.6,1.02,-3.99,4.93,0.53,-3.99,5.14,0.77,-6.1,4.99,0.7,-5.29,5.45,0.67,-4.95,5.51,0.63,-4.7,5.45,0.58,-4.52,5.34,1.54,-4.42,4.75,1.62,-4.48,4.81,1.73,-4.62,4.85,1.84,-4.83,4.82,2.37,-3.11,4.87,7.54,-1.05,-2.43,1.83,-4.4,4.4,1.93,-4.41,4.5,0.6,-2.01,5.87,1.41,-1.71,5.24,0.66,-1.82,5.86,2.34,0.57,4.29,3.33,0.1,4.11,1.73,-0.92,5.27,5.13,7.49,2.66,4.54,6.32,3.68,3.99,5.11,4.47,2.17,-5.44,4.46,1.4,5.01,5.32,1.62,6.6,4.92,1.89,8.24,4.27,4.2,2.24,3.38,5.73,1.41,2.43,1.86,2.36,3.84,4.99,3.07,3.08,1.3,1.42,4.83,1.31,-0.67,6.42,6.47,0.94,1.69,5.26,0.95,2.97,4.43,0.72,3.52,3.3,0.86,3.87,2.43,1.13,4.04,1.82,1.47,4.22,0.56,2.31,5.57,6.34,-0.53,1.88,5.59,3.21,2.69,0.24,-1.46,7.07,1.61,0.34,4.9,7.74,2.36,-2.01,1.39,1.85,4.45,1.79,-0.98,4.85,4.67,2.66,3.08,1.33,-0.28,6.1,7.27,-2.89,-2.25,1.86,2.59,3.76,0.92,0.07,6.67,5,-6.14,1.89,5.09,-7.18,0.71,7.16,-0.81,-0.07,5.84,-5.25,0.92,6.85,3.66,0.72,2.41,-8.26,4.12,0.18,-1.69,6.57,2.1,-0.16,4.57,6.41,2.24,1.56,3.67,2.36,3.64,3.18,2.29,3.78,2.2,-4.6,4.48,6.23,-1.94,1.66,1.29,-9.3,4.09,3.21,-8.53,2.8,4.07,-7.99,1.93,2.72,2.32,3.78,2.29,2.4,3.7,2,2.5,3.69,6.13,3.4,2.04,2.29,2.89,3.78,2.72,2.96,3.87,3.18,2.96,3.88,3.67,2.93,3.72,4.02,2.86,3.48,7.56,4.11,-0.99,4.02,2.48,3.44,1.78,-2.68,5.21,1.22,-1.18,5.95,0.73,-2.54,5.82,4.14,-7,2.67,3.31,-7.66,3.38,1.31,-8.64,4.7,5.94,-6.22,-0.63,2,2.74,3.74,0.9,1.24,5.75,2.31,-8.97,3.61,6.95,-2.44,-0.13,1.1,-4.46,5.12,1.18,-4.58,5.19,1.26,-4.79,5.24,1.33,-5.11,5.21,1.55,-5.82,4.76,1.95,-4.18,4.43,2.12,-4.14,4.56,2.29,-4.05,4.58,2.85,-3.67,4.48,5.28,-2.24,2.86,0.95,1.91,5.2,1.31,3.1,4.23,1.78,2.86,3.88,1.85,-4.1,4.25,5.44,-4.03,2.11,0.77,3.18,4.86,1.94,-6.61,4.52,0.52,1.58,6.15,1.25,0.23,5.68,1,-6.93,4.98,3.29,-5.38,3.8,2.31,-1.57,4.59,2.68,-6.11,4.1,3.83,-1.54,4.14,2.96,-2.27,4.44,4.39,-2.68,3.64,1.22,-7.83,4.97,1.54,-0.14,5.2,3.88,-6.04,3.31,3.08,-6.81,3.81,3.75,-4.5,3.73,6.09,-3.21,1.47,4.59,-4.73,2.98,6.58,-3.94,0.07,3.49,-3.2,4.13,1.26,0.8,5.31,1.13,-0.93,6.54,1.44,-1.14,5.91,0.92,-0.53,7,1.76,3.53,4.33,2.63,3.71,4.36,3.39,3.72,4.31,4.08,3.68,4.08,4.62,3.47,3.65,5.17,2.54,2.67,7.3,0.76,-0.05,4.71,1.65,3.11,4.07,1.48,3.48,3.27,1.47,3.73,2.53,1.62,3.87,1.97,1.86,3.96,1.58,2.1,4.08,7.66,0.67,-2.44,1.4,-1.34,5.63,0.88,0.66,6.23,0.77,-0.97,7.08,0.46,-1.33,6.79,0.75,-1.07,6.8,1.24,-1.59,5.48,0.39,-1.41,6.96,0.32,-1.61,6.51,1.64,2.56,3.86,1.26,2.47,4.2,1.03,2.38,4.62,4.25,2.77,3.32,4.53,2.91,3.34]);
+const CANON_T = new Uint16Array([173,155,133,246,33,7,382,398,362,263,466,249,308,415,324,78,95,191,356,389,264,127,34,162,368,264,389,139,162,34,267,0,302,37,72,0,11,302,0,11,0,72,349,451,350,120,121,231,452,350,451,232,231,121,267,302,269,37,39,72,303,269,302,73,72,39,357,343,350,128,121,114,277,350,343,47,114,121,350,452,357,121,128,232,453,357,452,233,232,128,299,333,297,69,67,104,332,297,333,103,104,67,175,152,396,175,171,152,377,396,152,148,152,171,381,384,382,154,155,157,398,382,384,173,157,155,280,347,330,50,101,118,348,330,347,119,118,101,269,303,270,39,40,73,304,270,303,74,73,40,9,336,151,9,151,107,337,151,336,108,107,151,344,278,360,115,131,48,279,360,278,49,48,131,262,431,418,32,194,211,424,418,431,204,211,194,304,408,270,74,40,184,409,270,408,185,184,40,272,310,407,42,183,80,415,407,310,191,80,183,322,270,410,92,186,40,409,410,270,185,40,186,347,449,348,118,119,229,450,348,449,230,229,119,434,432,430,214,210,212,422,430,432,202,212,210,313,314,18,83,18,84,17,18,314,17,84,18,307,375,306,77,76,146,291,306,375,61,146,76,259,387,260,29,30,160,388,260,387,161,160,30,286,414,384,56,157,190,398,384,414,173,190,157,418,424,406,194,182,204,335,406,424,106,204,182,367,416,364,138,135,192,434,364,416,214,192,135,391,423,327,165,98,203,358,327,423,129,203,98,298,301,284,68,54,71,251,284,301,21,71,54,4,275,5,4,5,45,281,5,275,51,45,5,254,373,253,24,23,144,374,253,373,145,144,23,320,321,307,90,77,91,375,307,321,146,91,77,280,425,411,50,187,205,427,411,425,207,205,187,421,313,200,201,200,83,18,200,313,18,83,200,335,321,406,106,182,91,405,406,321,181,91,182,405,321,404,181,180,91,320,404,321,90,91,180,17,314,16,17,16,84,315,16,314,85,84,16,425,266,426,205,206,36,423,426,266,203,36,206,369,396,400,140,176,171,377,400,396,148,171,176,391,269,322,165,92,39,270,322,269,40,39,92,417,465,413,193,189,245,464,413,465,244,245,189,257,258,386,27,159,28,385,386,258,158,28,159,260,388,467,30,247,161,466,467,388,246,161,247,248,456,419,3,196,236,399,419,456,174,236,196,333,298,332,104,103,68,284,332,298,54,68,103,285,8,417,55,193,8,168,417,8,168,8,193,340,261,346,111,117,31,448,346,261,228,31,117,285,417,441,55,221,193,413,441,417,189,193,221,327,460,326,98,97,240,328,326,460,99,240,97,277,355,329,47,100,126,371,329,355,142,126,100,309,392,438,79,218,166,439,438,392,219,166,218,381,382,256,154,26,155,341,256,382,112,155,26,360,279,420,131,198,49,429,420,279,209,49,198,365,364,379,136,150,135,394,379,364,169,135,150,355,277,437,126,217,47,343,437,277,114,47,217,443,444,282,223,52,224,283,282,444,53,224,52,281,275,363,51,134,45,440,363,275,220,45,134,431,262,395,211,170,32,369,395,262,140,32,170,337,299,338,108,109,69,297,338,299,67,69,109,335,273,321,106,91,43,375,321,273,146,43,91,348,450,349,119,120,230,451,349,450,231,230,120,467,359,342,247,113,130,446,342,359,226,130,113,282,283,334,52,105,53,293,334,283,63,53,105,250,458,462,20,242,238,461,462,458,241,238,242,276,353,300,46,70,124,383,300,353,156,124,70,325,292,324,96,95,62,308,324,292,78,62,95,283,276,293,53,63,46,300,293,276,70,46,63,447,264,345,227,116,34,372,345,264,143,34,116,352,345,346,123,117,116,340,346,345,111,116,117,1,19,274,1,44,19,354,274,19,125,19,44,248,281,456,3,236,51,363,456,281,134,51,236,425,426,427,205,207,206,436,427,426,216,206,207,380,381,252,153,22,154,256,252,381,26,154,22,391,393,269,165,39,167,267,269,393,37,167,39,199,428,200,199,200,208,421,200,428,201,208,200,330,329,266,101,36,100,371,266,329,142,100,36,422,432,273,202,43,212,287,273,432,57,212,43,290,250,328,60,99,20,462,328,250,242,20,99,258,286,385,28,158,56,384,385,286,157,56,158,342,446,353,113,124,226,265,353,446,35,226,124,257,386,259,27,29,159,387,259,386,160,159,29,430,422,431,210,211,202,424,431,422,204,202,211,445,342,276,225,46,113,353,276,342,124,113,46,424,422,335,204,106,202,273,335,422,43,202,106,306,292,307,76,77,62,325,307,292,96,62,77,366,447,352,137,123,227,345,352,447,116,227,123,302,268,303,72,73,38,271,303,268,41,38,73,371,358,266,142,36,129,423,266,358,203,129,36,327,294,460,98,240,64,455,460,294,235,64,240,294,331,278,64,48,102,279,278,331,49,102,48,303,271,304,73,74,41,272,304,271,42,41,74,427,436,434,207,214,216,432,434,436,212,216,214,304,272,408,74,184,42,407,408,272,183,42,184,394,430,395,169,170,210,431,395,430,211,210,170,395,369,378,170,149,140,400,378,369,176,140,149,296,334,299,66,69,105,333,299,334,104,105,69,417,168,351,193,122,168,6,351,168,6,168,122,280,411,352,50,123,187,376,352,411,147,187,123,319,320,325,89,96,90,307,325,320,77,90,96,285,295,336,55,107,65,296,336,295,66,65,107,404,320,403,180,179,90,319,403,320,89,90,179,330,348,329,101,100,119,349,329,348,120,119,100,334,293,333,105,104,63,298,333,293,68,63,104,323,454,366,93,137,234,447,366,454,227,234,137,16,315,15,16,15,85,316,15,315,86,85,15,429,279,358,209,129,49,331,358,279,102,49,129,15,316,14,15,14,86,317,14,316,87,86,14,8,285,9,8,9,55,336,9,285,107,55,9,329,349,277,100,47,120,350,277,349,121,120,47,252,253,380,22,153,23,374,380,253,145,23,153,402,403,318,178,88,179,319,318,403,89,179,88,351,6,419,122,196,6,197,419,6,197,6,196,324,318,325,95,96,88,319,325,318,89,88,96,397,367,365,172,136,138,364,365,367,135,138,136,288,435,397,58,172,215,367,397,435,138,215,172,438,439,344,218,115,219,278,344,439,48,219,115,271,311,272,41,42,81,310,272,311,80,81,42,5,281,195,5,195,51,248,195,281,3,51,195,273,287,375,43,146,57,291,375,287,61,57,146,396,428,175,171,175,208,199,175,428,199,208,175,268,312,271,38,41,82,311,271,312,81,82,41,444,445,283,224,53,225,276,283,445,46,225,53,254,339,373,24,144,110,390,373,339,163,110,144,295,282,296,65,66,52,334,296,282,105,52,66,346,448,347,117,118,228,449,347,448,229,228,118,454,356,447,234,227,127,264,447,356,34,127,227,336,296,337,107,108,66,299,337,296,69,66,108,151,337,10,151,10,108,338,10,337,109,108,10,278,439,294,48,64,219,455,294,439,235,219,64,407,415,292,183,62,191,308,292,415,78,191,62,358,371,429,129,209,142,355,429,371,126,142,209,345,372,340,116,111,143,265,340,372,35,143,111,388,390,466,161,246,163,249,466,390,7,163,246,352,346,280,123,50,117,347,280,346,118,117,50,295,442,282,65,52,222,443,282,442,223,222,52,19,94,354,19,125,94,370,354,94,141,94,125,295,285,442,65,222,55,441,442,285,221,55,222,419,197,248,196,3,197,195,248,197,195,197,3,359,263,255,130,25,33,249,255,263,7,33,25,275,274,440,45,220,44,457,440,274,237,44,220,300,383,301,70,71,156,368,301,383,139,156,71,417,351,465,193,245,122,412,465,351,188,122,245,466,263,467,246,247,33,359,467,263,130,33,247,389,251,368,162,139,21,301,368,251,71,21,139,374,386,380,145,153,159,385,380,386,158,159,153,379,394,378,150,149,169,395,378,394,170,169,149,351,419,412,122,188,196,399,412,419,174,196,188,426,322,436,206,216,92,410,436,322,186,92,216,387,373,388,160,161,144,390,388,373,163,144,161,393,326,164,167,164,97,2,164,326,2,97,164,354,370,461,125,241,141,462,461,370,242,141,241,0,267,164,0,164,37,393,164,267,167,37,164,11,12,302,11,72,12,268,302,12,38,12,72,386,374,387,159,160,145,373,387,374,144,145,160,12,13,268,12,38,13,312,268,13,82,13,38,293,300,298,63,68,70,301,298,300,71,70,68,340,265,261,111,31,35,446,261,265,226,35,31,380,385,381,153,154,158,384,381,385,157,158,154,280,330,425,50,205,101,266,425,330,36,101,205,423,391,426,203,206,165,322,426,391,92,165,206,429,355,420,209,198,126,437,420,355,217,126,198,391,327,393,165,167,98,326,393,327,97,98,167,457,438,440,237,220,218,344,440,438,115,218,220,382,362,341,155,112,133,463,341,362,243,133,112,457,461,459,237,239,241,458,459,461,238,241,239,434,430,364,214,135,210,394,364,430,169,210,135,414,463,398,190,173,243,362,398,463,133,243,173,262,428,369,32,140,208,396,369,428,171,208,140,457,274,461,237,241,44,354,461,274,125,44,241,316,403,317,86,87,179,402,317,403,178,179,87,315,404,316,85,86,180,403,316,404,179,180,86,314,405,315,84,85,181,404,315,405,180,181,85,313,406,314,83,84,182,405,314,406,181,182,84,418,406,421,194,201,182,313,421,406,83,182,201,366,401,323,137,93,177,361,323,401,132,177,93,408,407,306,184,76,183,292,306,407,62,183,76,408,306,409,184,185,76,291,409,306,61,76,185,410,409,287,186,57,185,291,287,409,61,185,57,436,410,432,216,212,186,287,432,410,57,186,212,434,416,427,214,207,192,411,427,416,187,192,207,264,368,372,34,143,139,383,372,368,156,139,143,457,459,438,237,218,239,309,438,459,79,239,218,352,376,366,123,137,147,401,366,376,177,147,137,4,1,275,4,45,1,274,275,1,44,1,45,428,262,421,208,201,32,418,421,262,194,32,201,327,358,294,98,64,129,331,294,358,102,129,64,367,435,416,138,192,215,433,416,435,213,215,192,455,439,289,235,59,219,392,289,439,166,219,59,328,462,326,99,97,242,370,326,462,141,242,97,326,370,2,97,2,141,94,2,370,94,141,2,460,455,305,240,75,235,289,305,455,59,235,75,448,339,449,228,229,110,254,449,339,24,110,229,261,446,255,31,25,226,359,255,446,130,226,25,449,254,450,229,230,24,253,450,254,23,24,230,450,253,451,230,231,23,252,451,253,22,23,231,451,252,452,231,232,22,256,452,252,26,22,232,256,341,452,26,232,112,453,452,341,233,112,232,413,464,414,189,190,244,463,414,464,243,244,190,441,413,286,221,56,189,414,286,413,190,189,56,441,286,442,221,222,56,258,442,286,28,56,222,442,258,443,222,223,28,257,443,258,27,28,223,444,443,259,224,29,223,257,259,443,27,223,29,259,260,444,29,224,30,445,444,260,225,30,224,260,467,445,30,225,247,342,445,467,113,247,225,250,309,458,20,238,79,459,458,309,239,79,238,290,305,392,60,166,75,289,392,305,59,75,166,460,305,328,240,99,75,290,328,305,60,75,99,376,433,401,147,177,213,435,401,433,215,213,177,250,290,309,20,79,60,392,309,290,166,60,79,411,416,376,187,147,192,433,376,416,213,192,147,341,463,453,112,233,243,464,453,463,244,243,233,453,464,357,233,128,244,465,357,464,245,244,128,412,343,465,188,245,114,357,465,343,128,114,245,437,343,399,217,174,114,412,399,343,188,114,174,363,440,360,134,131,220,344,360,440,115,220,131,456,420,399,236,174,198,437,399,420,217,198,174,456,363,420,236,198,134,360,420,363,131,134,198,361,401,288,132,58,177,435,288,401,215,177,58,353,265,383,124,156,35,372,383,265,143,35,156,255,249,339,25,110,7,390,339,249,163,7,110,261,255,448,31,228,25,339,448,255,110,25,228,14,317,13,14,13,87,312,13,317,82,87,13,317,402,312,87,82,178,311,312,402,81,178,82,402,318,311,178,81,88,310,311,318,80,88,81,318,324,310,88,80,95,415,310,324,191,95,80]);
+
+// <pose-core>
+// Puntos rígidos de la cara (frente, nariz, comisuras de los ojos, pómulos, sienes): no se mueven al hablar ni al sonreír.
+const POSE_IDX = [
+  10,151,9,8,109,338,67,297,103,332,69,299,104,333,108,337,      // frente
+  168,6,197,195,5,4,3,248,51,281,45,275,48,278,115,344,220,440,   // nariz
+  33,133,362,263,                                                // comisuras de los ojos
+  116,345,117,346,118,347,123,352,50,280,101,330,                // pómulos
+  127,356,234,454,162,389,21,251,93,323];                        // sienes
+
+// Valores y vectores propios de una matriz simétrica 4x4 (método de Jacobi)
+function jacobi4(A){
+  const a = A.map(r => r.slice()), v = [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
+  for (let sweep = 0; sweep < 30; sweep++){
+    let off = 0;
+    for (let p = 0; p < 4; p++) for (let q = p + 1; q < 4; q++) off += a[p][q] * a[p][q];
+    if (off < 1e-18) break;
+    for (let p = 0; p < 4; p++) for (let q = p + 1; q < 4; q++){
+      if (Math.abs(a[p][q]) < 1e-30) continue;
+      const th = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+      const t = Math.sign(th || 1) / (Math.abs(th) + Math.sqrt(th * th + 1));
+      const c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for (let k = 0; k < 4; k++){ const akp = a[k][p], akq = a[k][q]; a[k][p] = c * akp - s * akq; a[k][q] = s * akp + c * akq; }
+      for (let k = 0; k < 4; k++){ const apk = a[p][k], aqk = a[q][k]; a[p][k] = c * apk - s * aqk; a[q][k] = s * apk + c * aqk; }
+      for (let k = 0; k < 4; k++){ const vkp = v[k][p], vkq = v[k][q]; v[k][p] = c * vkp - s * vkq; v[k][q] = s * vkp + c * vkq; }
+    }
+  }
+  return { values: [a[0][0], a[1][1], a[2][2], a[3][3]], vectors: v };
+}
+
+// Ajuste de semejanza (Horn/Umeyama): live ≈ s·R·canon + t. live: Float32Array con x,y,z de cada punto.
+function fitPose(live, canon = CANON_V, idx = POSE_IDX){
+  const n = idx.length, ma = [0,0,0], mb = [0,0,0];
+  for (const i of idx) for (let k = 0; k < 3; k++){ ma[k] += canon[i*3+k] / n; mb[k] += live[i*3+k] / n; }
+  let Sxx=0,Sxy=0,Sxz=0,Syx=0,Syy=0,Syz=0,Szx=0,Szy=0,Szz=0, aa = 0, bb = 0;
+  for (const i of idx){
+    const ax = canon[i*3]-ma[0], ay = canon[i*3+1]-ma[1], az = canon[i*3+2]-ma[2];
+    const bx = live[i*3]-mb[0], by = live[i*3+1]-mb[1], bz = live[i*3+2]-mb[2];
+    Sxx+=ax*bx; Sxy+=ax*by; Sxz+=ax*bz; Syx+=ay*bx; Syy+=ay*by; Syz+=ay*bz; Szx+=az*bx; Szy+=az*by; Szz+=az*bz;
+    aa += ax*ax + ay*ay + az*az; bb += bx*bx + by*by + bz*bz;
+  }
+  const N = [
+    [Sxx+Syy+Szz, Syz-Szy,      Szx-Sxz,      Sxy-Syx],
+    [Syz-Szy,     Sxx-Syy-Szz,  Sxy+Syx,      Szx+Sxz],
+    [Szx-Sxz,     Sxy+Syx,     -Sxx+Syy-Szz,  Syz+Szy],
+    [Sxy-Syx,     Szx+Sxz,      Syz+Szy,     -Sxx-Syy+Szz]];
+  const { values, vectors } = jacobi4(N);
+  let m = 0; for (let k = 1; k < 4; k++) if (values[k] > values[m]) m = k;
+  let [w, x, y, z] = [vectors[0][m], vectors[1][m], vectors[2][m], vectors[3][m]];
+  const qn = Math.hypot(w, x, y, z); w /= qn; x /= qn; y /= qn; z /= qn;
+  const R = [
+    1-2*(y*y+z*z), 2*(x*y-w*z),   2*(x*z+w*y),
+    2*(x*y+w*z),   1-2*(x*x+z*z), 2*(y*z-w*x),
+    2*(x*z-w*y),   2*(y*z+w*x),   1-2*(x*x+y*y)];
+  const s = values[m] / aa;           // escala óptima (cm → píxeles)
+  const t = [0,1,2].map(r => mb[r] - s * (R[r*3]*ma[0] + R[r*3+1]*ma[1] + R[r*3+2]*ma[2]));
+  return { q: [x, y, z, w], R, s, t };
+}
+// </pose-core>
+
+/* =========================================================
+   CATÁLOGO (en la versión final viene de catalogo.json)
+   Medidas en notación óptica: ancho lente □ puente · largo patilla (mm)
+   ========================================================= */
+const FRAMES = [
+  // ---- Modelos 3D reales (GLB). "anchoMm" fija el ancho frontal real de la montura.
+  { id:'redonda', nombre:'Redonda clásica', estilo:'Metal', ref:'OPT-204', medidas:'47□22 · 145',
+    modelo:'monturas/redonda-metal.glb', anchoMm:130,
+    colores:[{n:'Plata', muestra:'#c9ced2'},{n:'Dorado', hex:'#e8bd6a', muestra:'#d4a64f'},{n:'Negro mate', hex:'#3a3a3a', rough:0.65, muestra:'#2b2b2b'}] },
+  { id:'rectangular', nombre:'Rectangular', estilo:'Acetato', ref:'OPT-118', medidas:'54□17 · 145',
+    modelo:'monturas/rectangular-acetato.glb', anchoMm:138,
+    colores:[{n:'Negro mate', muestra:'#1a1a1a'},{n:'Negro brillante', hex:'#0e0e0e', rough:0.22, muestra:'#0e0e0e'},
+             {n:'Azul noche', hex:'#1d2c4f', rough:0.3, muestra:'#1d2c4f'},{n:'Vino', hex:'#5c1622', rough:0.3, muestra:'#5c1622'}] },
+  { id:'semi', nombre:'Semi al aire', estilo:'Metal · nylon', ref:'OPT-415', medidas:'53□18 · 140',
+    modelo:'monturas/semi-al-aire.glb', anchoMm:135,
+    colores:[{n:'Grafito y azul', muestra:'#2b2f36'}] },
+  // ---- Monturas generadas por código (marcador de posición)
+  { id:'wayfarer', nombre:'Wayfarer', estilo:'Acetato', ref:'OPT-101', medidas:'52□18 · 145',
+    shape:'wayfarer', metal:false, rim:0.042, brow:0.7, depth:0.032, bridge:0.12, offY:0.01,
+    colores:[{n:'Negro brillante',hex:'#151515'},{n:'Carey',hex:'carey'},{n:'Cristal',hex:'#dfe4e6',clear:true}] },
+  { id:'gatita', nombre:'Ojo de gato', estilo:'Acetato', ref:'OPT-122', medidas:'53□17 · 140',
+    shape:'catEye', metal:false, rim:0.038, brow:0.9, depth:0.03, bridge:0.12, offY:0.012,
+    colores:[{n:'Carey',hex:'carey'},{n:'Vino',hex:'#6b1d2a'},{n:'Negro brillante',hex:'#151515'}] },
+  { id:'aviador', nombre:'Aviador', estilo:'Metal doble puente', ref:'OPT-310', medidas:'58□14 · 140',
+    shape:'aviador', metal:true, rim:0.011, depth:0.012, bridge:0.13, offY:-0.005, doubleBridge:true,
+    colores:[{n:'Dorado',hex:'#c9a45c'},{n:'Gunmetal',hex:'#5a5f63'},{n:'Plata',hex:'#c9ced2'}] },
+];
+
+/* Transitions: tipos y colores reales de la línea actual.
+   Cada tipo define cuánto se activa en cada luz: [interior, en el carro, sol]. Cada color es el tono a plena activación.
+   Luz: 0 = interior, 0.5 = en el carro (detrás del parabrisas), 1 = sol directo. */
+const TR = [
+  { id: 'claro', n: 'Sin Transitions', desc: 'Lente claro: no cambia con la luz.', lv: [0, 0, 0],
+    colores: [{ n: 'Claro', hex: '#ffffff' }] },
+  { id: 'gens', n: 'GEN S', desc: 'Totalmente claro adentro y oscuro al sol (categoría 3). En el carro casi no se activa: el parabrisas filtra los rayos UV.', lv: [0, 0.18, 1],
+    colores: [{ n: 'Gris', hex: '#56595c' }, { n: 'Café', hex: '#6c4a33' }, { n: 'Verde grafito', hex: '#4d5b4a' },
+              { n: 'Zafiro', hex: '#2c5b92' }, { n: 'Amatista', hex: '#62447f' }, { n: 'Ámbar', hex: '#a86c1f' },
+              { n: 'Esmeralda', hex: '#1f6b5a' }, { n: 'Rubí', hex: '#8f2b3d' }] },
+  { id: 'xtra', n: 'XTRActive', desc: 'XTRActive New Generation: leve tinte adentro, se oscurece en el carro (categoría 2) y queda extra oscuro al sol.', lv: [0.12, 0.62, 1],
+    colores: [{ n: 'Gris', hex: '#46494c' }, { n: 'Café', hex: '#5a3b27' }, { n: 'Verde grafito', hex: '#3f4b3d' }],
+    espejos: [{ n: 'Sin espejo' }, { n: 'Dorado', hex: '#e0b65a' }, { n: 'Plateado', hex: '#d0d6dc' }, { n: 'Cobre', hex: '#d0804c' },
+              { n: 'Azul verde', hex: '#3fb0a6' }, { n: 'Azul violeta', hex: '#6f6ce0' }] },
+  { id: 'xtrapol', n: 'XTRActive Polarized', desc: 'Como XTRActive, y al sol además polariza: corta los reflejos del agua, el pavimento y los vidrios.', lv: [0.12, 0.62, 1],
+    colores: [{ n: 'Gris', hex: '#44474a' }] },
+  { id: 'drive', n: 'Drivewear', desc: 'Para manejar, siempre polarizado: verde amarillo con poca luz, cobre detrás del parabrisas y café rojizo al sol.', lv: [1, 1, 1],
+    colores: [{ n: 'Drivewear', estados: ['#d3db7c', '#b97f48', '#5d3022'], hex: '#b97f48' }] },
+  { id: 'touch', n: 'Color Touch', desc: 'Un toque de color adentro que pasa a color completo al sol. En degradado o uniforme.', lv: [0.28, 0.45, 1], acabados: true,
+    colores: [{ n: 'Amatista', hex: '#6a4a86' }, { n: 'Ámbar', hex: '#ad7023' }, { n: 'Zafiro', hex: '#2d5d96' },
+              { n: 'Rubí', hex: '#952e42' }, { n: 'Esmeralda', hex: '#22705e' }] },
+];
+const TR_BY = Object.fromEntries(TR.map(t => [t.id, t]));
+
+
+const state = {
+  frame: 0, color: 0,
+  tint: 0, tintTarget: 0, trType: 'gens', trColor: 0, mirror: 0, degradado: true,
+  ar: false, blue: false,
+  fitScale: 1.0, fitOffY: 0.0, fitOffZ: 0.0, debug: false, showOcc: false,
+};
+
+/* =========================================================
+   GEOMETRÍA DE LAS MONTURAS
+   Unidades del modelo: 1.0 ≈ ancho frontal de una montura (~14 cm).
+   Convención del lente derecho: +x = lado de la patilla, -x = lado de la nariz.
+   ========================================================= */
+const N = 120;
+function superellipse(a, b, n, warp){
+  const pts = [];
+  for (let i = 0; i < N; i++){
+    const t = i / N * Math.PI * 2;
+    const c = Math.cos(t), s = Math.sin(t);
+    let x = a * Math.sign(c) * Math.pow(Math.abs(c), 2 / n);
+    let y = b * Math.sign(s) * Math.pow(Math.abs(s), 2 / n);
+    if (warp) [x, y] = warp(x, y);
+    pts.push([x, y]);
+  }
+  return pts;
+}
+const SHAPES = {
+  redonda:     () => superellipse(0.165, 0.165, 2),
+  rectangular: () => superellipse(0.19, 0.105, 4.5),
+  wayfarer:    () => superellipse(0.19, 0.14, 3.2, (x, y) => [x * (1 + 0.12 * y / 0.14), y + 0.02 * (x / 0.19)]),
+  catEye:      () => superellipse(0.19, 0.13, 2.8, (x, y) => {
+                   const k = Math.max(0, x / 0.19), up = Math.max(0, y / 0.13);
+                   return [x * (1 + 0.05 * up), y + 0.085 * k * k * up];
+                 }),
+  aviador:     () => superellipse(0.2, 0.16, 2.2, (x, y) => {
+                   if (y >= 0) return [x * (1 + 0.03 * y / 0.16), y * 0.78];
+                   const d = -y / 0.16;
+                   return [x * (1 - 0.12 * d) - 0.05 * d * d, y * 1.18];
+                 }),
+};
+// Desplaza el contorno hacia afuera; "brow" engrosa la parte superior (ceja de acetato).
+function offsetPts(pts, d, brow){
+  const n = pts.length;
+  return pts.map((p, i) => {
+    const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
+    let tx = b[0] - a[0], ty = b[1] - a[1];
+    const L = Math.hypot(tx, ty) || 1; tx /= L; ty /= L;
+    const nx = ty, ny = -tx;
+    const dd = d * (1 + brow * Math.max(0, ny));
+    return [p[0] + nx * dd, p[1] + ny * dd];
+  });
+}
+function framePaths(def){
+  const inner = SHAPES[def.shape]();
+  const outer = offsetPts(inner, def.rim, def.brow || 0);
+  let minX = Infinity, maxY = -Infinity, minY = Infinity, oMaxX = -Infinity, oMaxY = -Infinity;
+  for (const [x, y] of inner){ minX = Math.min(minX, x); maxY = Math.max(maxY, y); minY = Math.min(minY, y); }
+  for (const [x, y] of outer){ oMaxX = Math.max(oMaxX, x); oMaxY = Math.max(oMaxY, y); }
+  const offX = def.bridge / 2 - minX;
+  const R = p => [p[0] + offX, p[1]];
+  const Lf = p => [-(p[0] + offX), p[1]];
+  return {
+    rInner: inner.map(R), rOuter: outer.map(R),
+    lInner: inner.map(Lf), lOuter: outer.map(Lf),
+    hingeX: oMaxX + offX, hingeY: maxY * 0.5, topY: oMaxY, minY,
+    halfWidth: oMaxX + offX,
+  };
+}
+
+/* ---------- Texturas ---------- */
+function seeded(seed){ return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+let _carey;
+function careyTexture(){
+  if (_carey) return _carey;
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d'); const r = seeded(7);
+  g.fillStyle = '#4a2810'; g.fillRect(0, 0, 256, 256);
+  const cols = ['rgba(201,138,61,.55)', 'rgba(150,84,30,.6)', 'rgba(30,14,5,.7)', 'rgba(222,170,90,.35)'];
+  for (let i = 0; i < 140; i++){
+    const x = r() * 256, y = r() * 256, rad = 6 + r() * 30;
+    const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+    grd.addColorStop(0, cols[i % cols.length]); grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grd; g.beginPath(); g.ellipse(x, y, rad, rad * (0.4 + r() * 0.6), r() * Math.PI, 0, Math.PI * 2); g.fill();
+  }
+  _carey = new THREE.CanvasTexture(c);
+  _carey.colorSpace = THREE.SRGBColorSpace;
+  _carey.wrapS = _carey.wrapT = THREE.RepeatWrapping;
+  _carey.repeat.set(3, 3);
+  return _carey;
+}
+let _glare;
+function glareTexture(){
+  if (_glare) return _glare;
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.translate(128, 128); g.rotate(-0.6); g.translate(-128, -128);
+  const band = (x, w, a) => {
+    const grd = g.createLinearGradient(x - w, 0, x + w, 0);
+    grd.addColorStop(0, 'rgba(255,255,255,0)'); grd.addColorStop(0.5, `rgba(255,255,255,${a})`); grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd; g.fillRect(x - w, -100, w * 2, 460);
+  };
+  band(70, 26, 0.9); band(118, 10, 0.6); band(190, 40, 0.25);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  const spot = g.createRadialGradient(70, 60, 0, 70, 60, 40);
+  spot.addColorStop(0, 'rgba(255,255,255,.8)'); spot.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = spot; g.fillRect(0, 0, 256, 256);
+  _glare = new THREE.CanvasTexture(c);
+  return _glare;
+}
+
+/* ---------- Construcción 3D ---------- */
+const v2 = pts => pts.map(([x, y]) => new THREE.Vector2(x, y));
+function lensGeometry(pts){
+  const geo = new THREE.ShapeGeometry(new THREE.Shape(v2(pts)));
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox, uv = geo.attributes.uv, pos = geo.attributes.position;
+  for (let i = 0; i < uv.count; i++){
+    uv.setXY(i, (pos.getX(i) - bb.min.x) / (bb.max.x - bb.min.x), (pos.getY(i) - bb.min.y) / (bb.max.y - bb.min.y));
+  }
+  uv.needsUpdate = true;
+  return geo;
+}
+function frameMaterial(def, col){
+  if (col.hex === 'carey') return new THREE.MeshPhysicalMaterial({ map: careyTexture(), roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.1 });
+  if (col.clear) return new THREE.MeshPhysicalMaterial({ color: col.hex, roughness: 0.12, clearcoat: 1, transparent: true, opacity: 0.5, depthWrite: false });
+  return new THREE.MeshPhysicalMaterial({
+    color: col.hex,
+    metalness: def.metal ? 0.95 : 0.05,
+    roughness: col.matte ? 0.6 : (def.metal ? 0.26 : 0.28),
+    clearcoat: def.metal || col.matte ? 0 : 0.9, clearcoatRoughness: 0.12,
+  });
+}
+let lensMats = [], glareMats = [];
+function buildFrame(def, col){
+  const group = new THREE.Group();
+  const P = framePaths(def);
+  const mat = frameMaterial(def, col);
+  const half = def.depth / 2;
+
+  // Aros
+  for (const [outer, inner] of [[P.rOuter, P.rInner], [P.lOuter, P.lInner]]){
+    const shape = new THREE.Shape(v2(outer));
+    shape.holes.push(new THREE.Path(v2(inner)));
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: def.depth, curveSegments: 1, steps: 1,
+      bevelEnabled: true, bevelThickness: def.metal ? 0.003 : 0.006, bevelSize: def.metal ? 0.002 : 0.005, bevelSegments: 2,
+    });
+    geo.translate(0, 0, -half);
+    group.add(new THREE.Mesh(geo, mat));
+  }
+
+  // Puente
+  const by = P.topY * (def.metal ? 0.42 : 0.5);
+  const bx = def.bridge / 2 + (def.metal ? 0.004 : 0.02);
+  const bridge = new THREE.QuadraticBezierCurve3(
+    new THREE.Vector3(bx, by, 0), new THREE.Vector3(0, by + (def.metal ? 0.03 : 0.012), 0), new THREE.Vector3(-bx, by, 0));
+  group.add(new THREE.Mesh(new THREE.TubeGeometry(bridge, 24, def.metal ? 0.007 : 0.024, 10), mat));
+  if (def.doubleBridge){
+    const tx = def.bridge / 2 + 0.07, ty = P.topY - 0.004;
+    const top = new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(tx, ty, 0), new THREE.Vector3(0, ty + 0.012, 0), new THREE.Vector3(-tx, ty, 0));
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(top, 24, 0.006, 8), mat));
+  }
+
+  // Bisagras y patillas
+  for (const s of [1, -1]){
+    const hx = s * P.hingeX, hy = P.hingeY;
+    const end = new THREE.Mesh(new THREE.BoxGeometry(0.04, def.metal ? 0.026 : 0.05, def.depth + 0.02), mat);
+    end.position.set(hx - s * 0.014, hy, -0.01);
+    group.add(end);
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(hx, hy, -half - 0.01),
+      new THREE.Vector3(hx + s * 0.012, hy, -0.35),
+      new THREE.Vector3(hx + s * 0.02, hy - 0.01, -0.78),
+      new THREE.Vector3(hx + s * 0.012, hy - 0.09, -0.97),
+    ]);
+    const temple = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, def.metal ? 0.006 : 0.014, 8), mat);
+    temple.userData.patilla = true;
+    group.add(temple);
+  }
+
+  group.traverse(o => { if (o.isMesh && !o.userData.patilla) o.renderOrder = -2; });
+
+  // Plaquetas (monturas metálicas)
+  if (def.metal){
+    const padMat = new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.2, transparent: true, opacity: 0.45, depthWrite: false });
+    for (const s of [1, -1]){
+      const pad = new THREE.Mesh(new THREE.SphereGeometry(0.02, 16, 12), padMat);
+      pad.scale.set(0.55, 1, 0.4);
+      pad.position.set(s * (def.bridge / 2 + 0.02), P.minY * 0.25, -0.035);
+      group.add(pad);
+    }
+  }
+
+  // Lentes curvos con material físico
+  lensMats = []; glareMats = [];
+  for (const pts of [P.rInner, P.lInner]){
+    const lens = new THREE.Mesh(makeLensGeometry(pts), makeLensMaterial());
+    lens.userData.esLente = true;
+    group.add(lens);
+  }
+  return group;
+}
+function disposeGroup(g){
+  const shared = g.userData.compartida;
+  g.traverse(o => {
+    if (o.geometry && (!shared || o.userData.geoPropia)) o.geometry.dispose();
+    if (o.material && o.material.map !== _carey && o.material.map !== _glare) o.material.dispose?.();
+  });
+}
+
+/* ---------- Lentes curvos ----------
+   Los lentes reales no son planos: tienen una curva base (aquí curva ~5, radio 10 cm). Se generan con
+   anillos desde el centro hasta el contorno, así el reflejo del entorno cambia a lo largo del lente. */
+const LENS_RADIUS = 10 / 14;   // en unidades de montura (curva base ~5)
+function makeLensGeometry(outline, plane = { a: 0, b: 0, d: 0 }){
+  let pts = outline.map(p => [p[0], p[1]]);
+  let area = 0;
+  for (let i = 0; i < pts.length; i++){ const a = pts[i], b = pts[(i + 1) % pts.length]; area += a[0] * b[1] - b[0] * a[1]; }
+  if (area < 0) pts.reverse();
+  const n = pts.length, rings = 12;
+  let cx = 0, cy = 0; for (const p of pts){ cx += p[0] / n; cy += p[1] / n; }
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of pts){ minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]); minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]); }
+  const pos = [], uv = [], nor = [], idx = [];
+  // casquete esférico: z = plano + (r² máx − r²) / 2R  → el centro queda unos mm delante, los bordes sobre el plano
+  let rmax2 = 0; for (const p of pts) rmax2 = Math.max(rmax2, (p[0] - cx) ** 2 + (p[1] - cy) ** 2);
+  const add = (x, y) => {
+    const dx = x - cx, dy = y - cy;
+    pos.push(x, y, plane.a * x + plane.b * y + plane.d + (rmax2 - dx * dx - dy * dy) / (2 * LENS_RADIUS));
+    const nx = -plane.a + dx / LENS_RADIUS, ny = -plane.b + dy / LENS_RADIUS, nl = Math.hypot(nx, ny, 1);
+    nor.push(nx / nl, ny / nl, 1 / nl);
+    uv.push((x - minX) / (maxX - minX), (y - minY) / (maxY - minY));
+  };
+  add(cx, cy);
+  for (let r = 1; r <= rings; r++){
+    const t = r / rings;
+    for (const p of pts) add(cx + t * (p[0] - cx), cy + t * (p[1] - cy));
+  }
+  for (let i = 0; i < n; i++) idx.push(0, 1 + i, 1 + (i + 1) % n);
+  for (let r = 1; r < rings; r++){
+    const a0 = 1 + (r - 1) * n, b0 = 1 + r * n;
+    for (let i = 0; i < n; i++){
+      const i1 = (i + 1) % n;
+      idx.push(a0 + i, b0 + i, b0 + i1, a0 + i, b0 + i1, a0 + i1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setIndex(idx);
+  return g;
+}
+// Textura del tinte (permite degradados): la comparten todos los lentes
+const lensCanvas = document.createElement('canvas'); lensCanvas.width = 4; lensCanvas.height = 128;
+const lensTex = new THREE.CanvasTexture(lensCanvas); lensTex.colorSpace = THREE.SRGBColorSpace;
+function makeLensMaterial(){
+  const m = new THREE.MeshPhysicalMaterial({
+    color: '#ffffff', map: lensTex, metalness: 0, roughness: 0.03,
+    transmission: 1, thickness: 0, ior: 1.5,
+    specularIntensity: 1, specularColor: new THREE.Color('#ffffff'),
+    iridescence: 0, iridescenceIOR: 1.6, iridescenceThicknessRange: [260, 320],
+    envMapIntensity: 1.6, side: THREE.FrontSide,
+  });
+  lensMats.push(m);
+  return m;
+}
+
+/* ---------- Estado visual del lente ---------- */
+const _c1 = new THREE.Color(), _c2 = new THREE.Color(), _white = new THREE.Color('#ffffff');
+function lerpLv(lv, L){ return L <= 0.5 ? lv[0] + (lv[1] - lv[0]) * (L / 0.5) : lv[1] + (lv[2] - lv[1]) * ((L - 0.5) / 0.5); }
+function lensTint(L){
+  const tr = TR_BY[state.trType], col = tr.colores[state.trColor] || tr.colores[0];
+  if (col.estados){   // Drivewear: cambia de color, no solo de intensidad
+    const [a, b, c] = col.estados.map(h => new THREE.Color(h));
+    return L <= 0.5 ? a.lerp(b, L / 0.5) : b.lerp(c, (L - 0.5) / 0.5);
+  }
+  return _white.clone().lerp(new THREE.Color(col.hex), lerpLv(tr.lv, L));
+}
+function lightName(L){ return L < 0.15 ? 'Interior' : L < 0.35 ? 'Nublado' : L < 0.65 ? 'En el carro' : L < 0.85 ? 'Sol' : 'Sol directo'; }
+function updateLens(){
+  const L = state.tint, tr = TR_BY[state.trType];
+  const top = lensTint(L);
+  if (state.blue) top.multiply(_c2.set('#fff4d6'));             // filtro de luz azul: leve tono ámbar
+  // degradado (Color Touch): arriba el tono completo, abajo un 25 %
+  const bottom = tr.acabados && state.degradado ? _white.clone().lerp(top, 0.25) : top.clone();
+  const g = lensCanvas.getContext('2d'), grd = g.createLinearGradient(0, 0, 0, lensCanvas.height);
+  grd.addColorStop(0, '#' + top.getHexString()); grd.addColorStop(0.15, '#' + top.getHexString());
+  grd.addColorStop(0.85, '#' + bottom.getHexString()); grd.addColorStop(1, '#' + bottom.getHexString());
+  g.fillStyle = grd; g.fillRect(0, 0, lensCanvas.width, lensCanvas.height);
+  lensTex.needsUpdate = true;
+
+  // reflejos: antirreflejo (verde suave), luz azul (reflejo azulado), espejados (XTRActive)
+  const act = tr.id === 'claro' ? 0 : lerpLv(tr.lv, L);
+  const mir = tr.espejos && state.mirror ? tr.espejos[state.mirror] : null;
+  for (const m of lensMats){
+    m.map = lensTex;
+    m.ior = 1.5; m.specularIntensity = 1; m.specularColor.set('#ffffff'); m.iridescence = 0;
+    // antirreflejo: casi sin reflejo, solo un brillo residual verdoso (o azulado si también tiene filtro de luz azul)
+    if (state.ar){ m.specularIntensity = 0.16; m.specularColor.set(state.blue ? '#8fb0ff' : '#8dffa8'); }
+    else if (state.blue){ m.specularColor.set('#a9bcff'); }
+    if (mir){ m.ior = 1.5 + 1.8 * (0.35 + 0.65 * act); m.specularColor.set(mir.hex); m.specularIntensity = 1; m.iridescence = 0; }
+    m.needsUpdate = true;
+  }
+  document.getElementById('tintValue').textContent = tr.id === 'claro' ? 'Lente claro' : `${lightName(L)} · ${Math.round(act * 100)} %`;
+  const slider = document.getElementById('tint');
+  if (document.activeElement !== slider) slider.value = Math.round(L * 100);
+  document.querySelectorAll('#trLight .chip').forEach(c => c.setAttribute('aria-pressed', String(Math.abs(+c.dataset.l - state.tintTarget) < 0.01)));
+}
+
+/* =========================================================
+   ESCENA
+   Espacio de la escena = píxeles del video. Cámara ortográfica.
+   El canvas se voltea con CSS para el efecto espejo.
+   ========================================================= */
+const canvas = document.getElementById('gl');
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+// HDRI: reemplaza el entorno de estudio cuando carga (reflejos reales en lentes y monturas)
+// Paneles de luz (dirección desde la cabeza, tamaño, intensidad): techo al frente y una ventana a un lado
+const LIGHT_PANELS = [
+  { dir: [0, 0.16, 1], w: 16, h: 3.2, i: 6 },       // panel del techo, frente a la persona
+  { dir: [-0.62, 0.05, 1], w: 3.4, h: 10, i: 4.5 },  // ventanas y vitrinas a los lados
+  { dir: [0.62, 0.08, 1], w: 3.0, h: 9, i: 3.5 },
+  { dir: [-1.25, 0.15, 1], w: 3.0, h: 8, i: 3 },
+  { dir: [1.25, 0.12, 1], w: 3.0, h: 8, i: 3 },
+  { dir: [0, 0.65, 1], w: 12, h: 2.2, i: 4 },        // otra fila de luces del techo
+];
+async function loadEnvironment(path = 'recursos/entorno.hdr'){
+  try {
+    const buf = await getAsset(path);
+    const url = URL.createObjectURL(new Blob([buf]));
+    const hdr = await new RGBELoader().loadAsync(url);
+    URL.revokeObjectURL(url);
+    // El HDRI como fondo, más paneles de luz como los de una óptica: dan los reflejos que se ven en los lentes
+    const envScene = new THREE.Scene();
+    hdr.colorSpace = THREE.LinearSRGBColorSpace;
+    envScene.add(new THREE.Mesh(new THREE.SphereGeometry(50, 64, 32), new THREE.MeshBasicMaterial({ map: hdr, side: THREE.BackSide })));
+    for (const pnl of LIGHT_PANELS){
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(pnl.w, pnl.h), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.98, 0.95).multiplyScalar(pnl.i * 0.8), side: THREE.DoubleSide }));
+      m.position.set(...pnl.dir).normalize().multiplyScalar(20); m.lookAt(0, 0, 0);
+      envScene.add(m);
+    }
+    const env = pmrem.fromScene(envScene, 0.025).texture;
+    hdr.dispose();
+    scene.environment = env;
+  } catch (e){ console.warn('Sin HDRI, se usa el entorno de estudio', e); }
+}
+scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+const dir = new THREE.DirectionalLight(0xffffff, 1.4); dir.position.set(0.4, 1, 1.2); scene.add(dir);
+
+const camera = new THREE.OrthographicCamera(0, 1, 1, 0, 0.1, 30000);
+camera.position.set(0, 0, 12000);
+
+const video = document.createElement('video');
+video.playsInline = true; video.muted = true; video.autoplay = true;
+video.setAttribute('playsinline', '');
+video.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+document.body.append(video); // Safari en iPad/iPhone necesita el video dentro de la página
+const videoTex = new THREE.VideoTexture(video);
+videoTex.colorSpace = THREE.SRGBColorSpace;
+const videoMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ map: videoTex, depthTest: false, depthWrite: false, toneMapped: false }));
+videoMesh.renderOrder = -3;
+scene.add(videoMesh);
+
+// anchor = la cabeza (unidades: cm de la cara canónica). glasses = los lentes (1 unidad = 14 cm).
+const anchor = new THREE.Group(); anchor.visible = false; scene.add(anchor);
+const glasses = new THREE.Group(); anchor.add(glasses);
+const fitGroup = new THREE.Group(); glasses.add(fitGroup);
+// Dónde se apoyan los lentes en la cara canónica: centro a la altura de los ojos, plano de los lentes ~2 cm delante del párpado
+const GLASSES_POS = { y: 2.65, z: 6.0 };
+
+// Oclusores: superficies invisibles que solo escriben profundidad, para que la cabeza tape lo que queda detrás.
+const occMat = new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide });
+const occDebugMat = new THREE.MeshBasicMaterial({ color: '#ff3d7f', wireframe: true, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthTest: false });
+// 1) Cráneo: elipsoide detrás de la cara. Su ancho se ajusta a cada montura para no tapar la patilla del lado cercano.
+const skull = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), occMat);
+skull.position.set(0, 3, -4.6); skull.scale.set(6.4, 10, 9.6); skull.renderOrder = -1;
+anchor.add(skull);
+// 2) La cara real de la persona: la malla de 468 puntos detectados, actualizada en cada cuadro.
+//    Solo la parte central (nariz, mejillas, frente); las sienes las cubre el cráneo.
+const FACE_CUT_X = 5.8, FACE_PUSH_CM = 0.4;
+const faceIdx = [];
+for (let i = 0; i < CANON_T.length; i += 3){
+  const a = CANON_T[i], b = CANON_T[i + 1], c = CANON_T[i + 2];
+  if (Math.abs(CANON_V[a * 3]) < FACE_CUT_X && Math.abs(CANON_V[b * 3]) < FACE_CUT_X && Math.abs(CANON_V[c * 3]) < FACE_CUT_X) faceIdx.push(a, b, c);
+}
+const faceGeo = new THREE.BufferGeometry();
+faceGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(468 * 3), 3).setUsage(THREE.DynamicDrawUsage));
+faceGeo.setIndex(faceIdx);
+const faceOcc = new THREE.Mesh(faceGeo, occMat);
+faceOcc.renderOrder = -1; faceOcc.frustumCulled = false; faceOcc.visible = false;
+anchor.add(faceOcc);   // en cm de la cabeza: se mueve con la misma pose (suavizada) que los lentes
+
+// 3) Cabeza completa (orejas, nuca, cuello) alineada a la cara canónica. Reemplaza al elipsoide cuando carga.
+let headOcc = null;
+async function loadHead(){
+  try {
+    const buf = await getAsset('recursos/cabeza-oclusor.glb');
+    const gltf = await new Promise((res, rej) => gltfLoader.parse(buf.slice(0), '', res, rej));
+    gltf.scene.traverse(o => { if (o.isMesh && !headOcc) headOcc = o; });
+    if (!headOcc) return;
+    headOcc.removeFromParent();
+    headOcc.material = occMat; headOcc.renderOrder = -1; headOcc.frustumCulled = false;
+    anchor.add(headOcc);
+    skull.visible = false;
+    buildHeadWidthMap(headOcc.geometry);
+    if (current) setFrame(state.frame, state.color, { silent: true });
+  } catch (e){ console.warn('Sin modelo de cabeza, se usa el elipsoide', e); }
+}
+function setOccluderDebug(on){
+  const list = [skull, faceOcc, headOcc].filter(Boolean);
+  for (const o of list){ o.material = on ? occDebugMat : occMat; o.renderOrder = on ? 9 : -1; }
+}
+
+/* Mapa del ancho de la cabeza (sin orejas): para cada altura y profundidad, a qué distancia del centro
+   está la piel a cada lado. Las patillas lo usan para pasar por fuera de la cabeza y llegar a las orejas. */
+const HEAD = { halfWidthCm: 7.3, ratio: 1, map: null, y0: -3, z0: -11, step: 0.5, ny: 23, nz: 35 };
+function buildHeadWidthMap(geo){
+  const pos = geo.attributes.position, idx = geo.index.array, keep = [];
+  const c = new THREE.Vector3(), a = new THREE.Vector3();
+  for (let t = 0; t < idx.length; t += 3){
+    c.set(0, 0, 0);
+    for (let k = 0; k < 3; k++) c.add(a.fromBufferAttribute(pos, idx[t + k]));
+    c.multiplyScalar(1 / 3);
+    const ear = Math.abs(c.x) > 7.6 && c.z < -3.3 && c.z > -7.8 && c.y > -2.6 && c.y < 4.8;
+    if (!ear) keep.push(idx[t], idx[t + 1], idx[t + 2]);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', pos); g.setIndex(keep);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+  const ray = new THREE.Raycaster(), dir = new THREE.Vector3(), org = new THREE.Vector3();
+  const map = { 1: new Float32Array(HEAD.ny * HEAD.nz), '-1': new Float32Array(HEAD.ny * HEAD.nz) };
+  for (const side of [1, -1]) for (let iy = 0; iy < HEAD.ny; iy++) for (let iz = 0; iz < HEAD.nz; iz++){
+    org.set(side * 30, HEAD.y0 + iy * HEAD.step, HEAD.z0 + iz * HEAD.step); dir.set(-side, 0, 0);
+    ray.set(org, dir);
+    const hit = ray.intersectObject(m, false)[0];
+    map[side][iy * HEAD.nz + iz] = hit ? Math.abs(hit.point.x) : 0;
+  }
+  HEAD.map = map;
+}
+function headHalfWidth(side, y, z){
+  if (!HEAD.map) return HEAD.halfWidthCm * (z < 1 ? 1 : 0.9);
+  const fy = THREE.MathUtils.clamp((y - HEAD.y0) / HEAD.step, 0, HEAD.ny - 1), fz = THREE.MathUtils.clamp((z - HEAD.z0) / HEAD.step, 0, HEAD.nz - 1);
+  const iy = Math.floor(fy), iz = Math.floor(fz), m = HEAD.map[side];
+  const g = (y, z) => m[Math.min(HEAD.ny - 1, y) * HEAD.nz + Math.min(HEAD.nz - 1, z)];
+  const ty = fy - iy, tz = fz - iz;
+  return ((g(iy, iz) * (1 - tz) + g(iy, iz + 1) * tz) * (1 - ty) + (g(iy + 1, iz) * (1 - tz) + g(iy + 1, iz + 1) * tz) * ty) * HEAD.ratio;
+}
+
+/* Abre las patillas como al ponerse unos lentes reales: giran hacia afuera desde la bisagra solo lo
+   necesario para no atravesar la cabeza, y después siguen pegadas a ella hasta las orejas. */
+const TEMPLE_GAP_CM = 0.25;
+const TEMPLE_MIN_X = 0.3;   // las patillas están a más de 4 cm del centro; lo de adentro no se toca
+const EAR_REST = { y: 3.8, z: -4.0 };   // donde se apoya la patilla: la raíz de la oreja (cm de la cabeza)
+// Los lentes altos quedan más abajo respecto a la pupila (la pupila va más o menos al 60 % de la altura del lente)
+function pupilDrop(obj){
+  const h = obj && obj.userData.lensHcm || 3;
+  return PUPIL_DROP_CM + 0.3 * Math.max(0, h - 3);
+}
+function glassesPlacement(obj = current){
+  return {
+    gy: (fit.pupilY != null ? fit.pupilY - pupilDrop(obj) : GLASSES_POS.y) + state.fitOffY,
+    gz: (fit.noseZ != null ? fit.noseZ + LENS_GAP_CM : GLASSES_POS.z) + state.fitOffZ,
+  };
+}
+function splayTemples(obj){
+  const unit = 14 * state.fitScale;                          // cm por unidad de montura
+  // altura de los lentes de esta montura (cm)
+  obj.rotation.x = 0; obj.updateMatrixWorld(true);
+  const lb = new THREE.Box3();
+  obj.traverse(o => { if (o.isMesh && o.userData.esLente) lb.expandByObject(o); });
+  if (!lb.isEmpty()) obj.userData.lensHcm = (lb.max.y - lb.min.y) * unit;
+  const { gy, gz } = glassesPlacement(obj);
+  obj.userData.splayAt = { gy, gz, ratio: HEAD.ratio, scale: state.fitScale };
+  obj.rotation.x = 0;
+  obj.updateMatrixWorld(true);
+  const inv = obj.parent ? obj.parent.matrixWorld.clone().invert() : new THREE.Matrix4();
+  const parts = [], v = new THREE.Vector3();
+  const sides = { 1: { zh: -Infinity, pts: [] }, '-1': { zh: -Infinity, pts: [] } };
+  obj.traverse(o => {
+    if (!o.isMesh || !o.userData.patilla) return;
+    const M = inv.clone().multiply(o.matrixWorld), pos = o.geometry.attributes.position;
+    parts.push({ o, M });
+    for (let i = 0; i < pos.count; i++){
+      v.fromBufferAttribute(pos, i).applyMatrix4(M);
+      const sd = sides[v.x >= 0 ? 1 : -1];
+      sd.zh = Math.max(sd.zh, v.z); sd.pts.push(v.x, v.y, v.z);
+    }
+  });
+  if (!parts.length) return;
+  // Inclinación pantoscópica: el frente se inclina un poco para que la patilla llegue a la parte de arriba de la oreja
+  let hy = 0, hn = 0;
+  for (const side of [1, -1]){ const sd = sides[side]; for (let i = 0; i < sd.pts.length; i += 3) if (sd.zh - sd.pts[i + 2] < 0.06 && Math.abs(sd.pts[i]) > TEMPLE_MIN_X){ hy += sd.pts[i + 1]; hn++; } }
+  const hingeY = gy + (hn ? hy / hn : 0) * unit;
+  const tilt = THREE.MathUtils.clamp(Math.atan2(EAR_REST.y - hingeY, gz - EAR_REST.z), 0, THREE.MathUtils.degToRad(12));
+  obj.rotation.x = tilt;
+  obj.userData.tilt = THREE.MathUtils.radToDeg(tilt);
+  const ct = Math.cos(tilt), st = Math.sin(tilt);
+  const BIN = 0.02, offsets = {};
+  for (const side of [1, -1]){
+    const sd = sides[side]; if (!sd.pts.length) continue;
+    const nb = Math.ceil((sd.zh + 1.3) / BIN) + 1;
+    const minX = new Float32Array(nb).fill(Infinity), sumY = new Float32Array(nb), cnt = new Uint32Array(nb);
+    let y0 = 0, n0 = 0;
+    for (let i = 0; i < sd.pts.length; i += 3) if (sd.zh - sd.pts[i + 2] < 3 * BIN && Math.abs(sd.pts[i]) > TEMPLE_MIN_X){ y0 += sd.pts[i + 1]; n0++; }
+    const yHingeU = n0 ? y0 / n0 : 0;
+    // solo el tramo recto de la patilla (a la altura de la bisagra); la curva de la punta se mueve con él
+    for (let i = 0; i < sd.pts.length; i += 3){
+      if (Math.abs(sd.pts[i + 1] - yHingeU) > 0.06 || Math.abs(sd.pts[i]) < TEMPLE_MIN_X) continue;
+      const b = Math.min(nb - 1, Math.max(0, Math.floor((sd.zh - sd.pts[i + 2]) / BIN)));
+      minX[b] = Math.min(minX[b], Math.abs(sd.pts[i])); sumY[b] += sd.pts[i + 1]; cnt[b]++;
+    }
+    // cuánto hay que sacar la patilla en cada tramo para que pase por fuera de la cabeza
+    const need = new Float32Array(nb);
+    let slope = 0;
+    for (let b = 0; b < nb; b++){
+      if (!cnt[b]) continue;
+      const zU = sd.zh - (b + 0.5) * BIN, yU = sumY[b] / cnt[b];
+      const yR = yU * ct - zU * st, zR = yU * st + zU * ct;
+      const w = headHalfWidth(side, gy + yR * unit, gz + zR * unit);
+      need[b] = w > 0 ? Math.min(2 / unit, Math.max(0, (w + TEMPLE_GAP_CM) / unit - minX[b])) : 0;
+      const d = (b + 0.5) * BIN;
+      if (d > 0.03) slope = Math.max(slope, need[b] / d);
+    }
+    slope = Math.min(slope, 0.6);
+    // una recta desde la bisagra (el giro mínimo que libra la cabeza) que se aplana al llegar al máximo necesario
+    const off = new Float32Array(nb), top = Math.max(0, ...need);
+    for (let b = 0; b < nb; b++) off[b] = Math.min(slope * (b + 0.5) * BIN, top);
+    offsets[side] = { zh: sd.zh, off, nb };
+    if (state.debug) (obj.userData.dbg ||= {})[side] = { zh: +sd.zh.toFixed(3), yHinge: +yHingeU.toFixed(3), slope: +slope.toFixed(3),
+      bins: Array.from(need).map((n, b) => cnt[b] ? [+(sd.zh - (b + 0.5) * BIN).toFixed(2), +(minX[b] * unit).toFixed(2), +(n * unit).toFixed(2)] : null).filter(Boolean).filter((_, i) => i % 3 === 0) };
+  }
+  obj.userData.splay = Math.max(...Object.values(offsets).map(o => Math.max(...o.off))) * unit;   // cm
+  for (const { o, M } of parts){
+    const src = o.geometry.attributes.position, Mi = M.clone().invert();
+    const arr = new Float32Array(src.count * 3);
+    for (let i = 0; i < src.count; i++){
+      v.fromBufferAttribute(src, i).applyMatrix4(M);
+      const side = v.x >= 0 ? 1 : -1, od = offsets[side];
+      if (od && Math.abs(v.x) > TEMPLE_MIN_X){
+        const fb = Math.max(0, (od.zh - v.z) / BIN - 0.5), b0 = Math.min(od.nb - 1, Math.floor(fb)), b1 = Math.min(od.nb - 1, b0 + 1), t = fb - Math.floor(fb);
+        v.x += side * (od.off[b0] * (1 - t) + od.off[b1] * t);
+      }
+      v.applyMatrix4(Mi);
+      arr[i * 3] = v.x; arr[i * 3 + 1] = v.y; arr[i * 3 + 2] = v.z;
+    }
+    const g = o.geometry.clone();
+    g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    o.geometry = g;
+    o.userData.geoPropia = true;
+  }
+}
+
+// Ajusta el ancho del cráneo a las patillas de la montura actual
+function updateSkull(obj){
+  fitGroup.updateMatrixWorld(true);
+  const inv = fitGroup.matrixWorld.clone().invert();
+  const xs = [], v = new THREE.Vector3();
+  obj.traverse(o => {
+    if (!o.isMesh || o.userData.esLente || o.userData.esReflejo) return;
+    const M = inv.clone().multiply(o.matrixWorld), pos = o.geometry.attributes.position;
+    const step = Math.max(1, Math.floor(pos.count / 4000));
+    for (let i = 0; i < pos.count; i += step){
+      v.fromBufferAttribute(pos, i).applyMatrix4(M);
+      if (v.z < -0.25 && v.z > -0.6) xs.push(Math.abs(v.x));
+    }
+  });
+  if (!xs.length) return;
+  xs.sort((a, b) => a - b);
+  const innerCm = xs[Math.floor(xs.length * 0.1)] * 14 * state.fitScale;
+  skull.scale.x = THREE.MathUtils.clamp(innerCm - 0.35, 5.2, 7.4);
+}
+
+// Puntos de depuración (tecla D)
+const dbgGeo = new THREE.BufferGeometry();
+dbgGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(478 * 3), 3));
+const dbgPts = new THREE.Points(dbgGeo, new THREE.PointsMaterial({ color: '#00e5ff', size: 3, depthTest: false, sizeAttenuation: false }));
+dbgPts.visible = false; dbgPts.renderOrder = 10; scene.add(dbgPts);
+
+let vw = 0, vh = 0;
+function syncVideo(){
+  if (!video.videoWidth) return;
+  if (video.videoWidth !== vw || video.videoHeight !== vh){
+    vw = video.videoWidth; vh = video.videoHeight;
+    videoMesh.scale.set(vw, vh, 1);
+    videoMesh.position.set(vw / 2, vh / 2, -9000);
+    fitCamera();
+  }
+}
+function fitCamera(){
+  const cw = stage.clientWidth, ch = stage.clientHeight;
+  if (!cw || !ch) return;
+  renderer.setSize(cw, ch, false);
+  if (!vw) return;
+  const A = cw / ch, V = vw / vh;
+  let w, h;
+  if (A > V){ w = vw; h = vw / A; } else { h = vh; w = vh * A; }
+  camera.left = vw / 2 - w / 2; camera.right = vw / 2 + w / 2;
+  camera.top = vh / 2 + h / 2; camera.bottom = vh / 2 - h / 2;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(fitCamera).observe(stage);
+
+/* ---------- Montura activa ---------- */
+let current = null, frameToken = 0;
+async function setFrame(i, colorIdx = 0, { silent = false } = {}){
+  state.frame = (i + FRAMES.length) % FRAMES.length;
+  state.color = colorIdx;
+  const def = FRAMES[state.frame];
+  const tok = ++frameToken;
+  if (!silent) renderFrameUI();
+  let obj;
+  if (isGLB(def)){
+    try {
+      const tpl = await loadTemplate(def);
+      if (tok !== frameToken) return;
+      obj = instantiateGLB(def, tpl, def.colores[state.color]);
+    } catch (e){
+      console.error(e);
+      if (tok === frameToken) toast('No se pudo cargar «' + def.nombre + '». Revisa que el archivo sea un .glb válido.');
+      return;
+    }
+  } else {
+    obj = buildFrame(def, def.colores[state.color]);
+    splayTemples(obj);
+  }
+  if (current){ fitGroup.remove(current); disposeGroup(current); }
+  current = obj;
+  fitGroup.add(current);
+  fitGroup.position.y = def.offY || 0;
+  updateSkull(current);
+  updateLens();
+}
+
+/* =========================================================
+   MODELOS GLB
+   Convención esperada: Y arriba, frente hacia +Z, patillas hacia -Z,
+   lentes en objetos llamados "lente". Si el modelo viene girado,
+   se orienta solo (y con la tecla R en modo ajuste se gira 90°).
+   Unidades de la app: 1.0 = 140 mm.
+   ========================================================= */
+const gltfLoader = new GLTFLoader();
+const isGLB = def => !!(def.modelo || def._buf);
+const LENS_RE = /^(lente|lentes|lens|lenses|glass|cristal|cristales|vidrio|mica)(?![a-z])/i;
+
+function b64ToBuffer(b64){
+  const bin = atob(b64), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+async function getAsset(path){
+  const emb = window.MODELOS_EMBEBIDOS && window.MODELOS_EMBEBIDOS[path];
+  if (emb) return b64ToBuffer(emb);
+  const r = await fetch(path);
+  if (!r.ok) throw new Error('No se encontró ' + path);
+  return r.arrayBuffer();
+}
+async function getBuffer(def){
+  if (def._buf) return def._buf;
+  return (def._buf = await getAsset(def.modelo));
+}
+function loadTemplate(def){
+  if (!def._tpl) def._tpl = (async () => {
+    const buf = await getBuffer(def);
+    const gltf = await new Promise((res, rej) => gltfLoader.parse(buf.slice(0), '', res, rej));
+    const tpl = prepareModel(gltf.scene, def);
+    def._info = tpl.info;
+    return tpl;
+  })().catch(e => { def._tpl = null; throw e; });
+  return def._tpl;
+}
+
+// <normalizar>
+const FRONT_Z = -0.05;   // en unidades de la montura (1 = 14 cm): todo lo que está más de 7 mm detrás del plano de los lentes es patilla
+function isLensMesh(m){
+  const mats = [].concat(m.material);
+  if ([m.name, m.parent && m.parent.name, m.parent && m.parent.parent && m.parent.parent.name].some(n => n && LENS_RE.test(n))) return true;
+  if (mats.some(mt => LENS_RE.test(mt.name || ''))) return true;
+  return mats.every(mt => mt.transparent && mt.opacity < 0.5 && !mt.map);
+}
+function samplePoints(meshes, max = 40000){
+  let total = 0; for (const m of meshes) total += m.geometry.attributes.position.count;
+  const step = Math.max(1, Math.ceil(total / max)), pts = [];
+  for (const m of meshes){
+    const pos = m.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i += step) pts.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld));
+  }
+  return pts;
+}
+const boxOf = pts => new THREE.Box3().setFromPoints(pts);
+const meanOf = pts => pts.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / Math.max(1, pts.length));
+
+function prepareModel(root, def){
+  const junk = []; root.traverse(o => { if (o.isLight || o.isCamera) junk.push(o); });
+  junk.forEach(o => o.parent && o.parent.remove(o));
+  root.position.set(0, 0, 0); root.quaternion.identity(); root.scale.set(1, 1, 1);
+  const pivot = new THREE.Group(); pivot.add(root);
+  pivot.updateMatrixWorld(true);
+
+  const lens = [], frame = [];
+  root.traverse(o => { if (o.isMesh) (isLensMesh(o) ? lens : frame).push(o); });
+  if (!frame.length) throw new Error('El modelo no tiene montura');
+  let fp = samplePoints(frame), lp = samplePoints(lens);
+  const bb = boxOf(fp);
+
+  // Orientación: el frente es el extremo donde están los lentes (o donde se concentra la geometría)
+  let rotY = 0;
+  if (def.autoOrientar !== false){
+    const ex = bb.max.x - bb.min.x, ez = bb.max.z - bb.min.z;
+    let axis, front;
+    if (lp.length){
+      const lc = meanOf(lp), c = bb.getCenter(new THREE.Vector3());
+      const dx = (lc.x - c.x) / ex, dz = (lc.z - c.z) / ez;
+      if (Math.abs(dx) > Math.abs(dz)){ axis = 'x'; front = Math.sign(dx); } else { axis = 'z'; front = Math.sign(dz); }
+    } else {
+      const asym = (k, lo, hi) => { const e = hi - lo; let a = 0, b = 0; for (const p of fp){ if (p[k] - lo < 0.15 * e) a++; if (hi - p[k] < 0.15 * e) b++; } return (b - a) / fp.length; };
+      const ax = asym('x', bb.min.x, bb.max.x), az = asym('z', bb.min.z, bb.max.z);
+      if (Math.abs(ax) > Math.abs(az)){ axis = 'x'; front = Math.sign(ax) || 1; } else { axis = 'z'; front = Math.sign(az) || 1; }
+    }
+    rotY = axis === 'z' ? (front > 0 ? 0 : Math.PI) : (front > 0 ? -Math.PI / 2 : Math.PI / 2);
+  }
+  rotY += THREE.MathUtils.degToRad(def.giroExtra || 0);
+  pivot.rotation.y = rotY;
+  const R = new THREE.Matrix4().makeRotationY(rotY);
+  fp = fp.map(p => p.applyMatrix4(R)); lp = lp.map(p => p.applyMatrix4(R));
+
+  // Escala: ancho frontal real → unidades de la app (1 = 140 mm)
+  const bb2 = boxOf(fp);
+  const width = bb2.max.x - bb2.min.x;
+  // Tamaño real: si el catálogo trae las medidas de la montura (p. ej. 53□18), el ancho de cada lente queda exacto.
+  // Si no, se usa el ancho total del catálogo o el del archivo.
+  const med = /(\d{2})\s*□\s*(\d{1,2})/.exec(def.medidas || '');
+  let lensW = 0;
+  if (lp.length){
+    const cx0 = (bb2.min.x + bb2.max.x) / 2, sides = [[Infinity, -Infinity], [Infinity, -Infinity]];
+    for (const p of lp){ const sd = sides[p.x >= cx0 ? 0 : 1]; sd[0] = Math.min(sd[0], p.x); sd[1] = Math.max(sd[1], p.x); }
+    const ws = sides.filter(sd => sd[1] > sd[0]).map(sd => sd[1] - sd[0]);
+    if (ws.length) lensW = ws.reduce((a, b) => a + b, 0) / ws.length;
+  }
+  let k;
+  if (med && lensW > 0) k = (+med[1] / 1000) / lensW / 0.14;
+  else {
+    const anchoM = def.anchoMm ? def.anchoMm / 1000 : (width > 0.11 && width < 0.17 ? width : 0.14);
+    k = anchoM / width / 0.14;
+  }
+  const anchoM = width * k * 0.14;
+
+  // Centro: el centro de los lentes queda a la altura de los ojos y su plano en z = 0
+  const cx = (bb2.min.x + bb2.max.x) / 2;
+  let cy, cz;
+  if (lp.length){ const lb = boxOf(lp); cy = (lb.min.y + lb.max.y) / 2; cz = meanOf(lp).z; }
+  else {
+    const depth = bb2.max.z - bb2.min.z;
+    const fr = fp.filter(p => bb2.max.z - p.z < 0.12 * depth), fb = boxOf(fr);
+    cy = (fb.min.y + fb.max.y) / 2; cz = (fb.min.z + fb.max.z) / 2;
+  }
+  pivot.position.set(-cx, -cy, -cz);
+  const holder = new THREE.Group();
+  holder.add(pivot);
+  holder.scale.setScalar(k);
+  holder.updateMatrixWorld(true);
+
+  // Lentes: se reemplazan por lentes curvos generados desde el contorno de los del modelo (uno por lado)
+  const inv = holder.matrixWorld.clone().invert();
+  const v = new THREE.Vector3();
+  const sidePts = { 1: [], '-1': [] }, sideEdge = { 1: [], '-1': [] };
+  const va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3();
+  for (const m of lens){
+    const pos = m.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++){ v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld); sidePts[v.x >= 0 ? 1 : -1].push(v.x, v.y, v.z); }
+    // puntos a lo largo de cada arista: el contorno sale de los bordes reales, aunque los triángulos sean grandes
+    const ix = m.geometry.index ? m.geometry.index.array : Array.from({ length: pos.count }, (_, i) => i);
+    for (let t = 0; t < ix.length; t += 3){
+      va.fromBufferAttribute(pos, ix[t]).applyMatrix4(m.matrixWorld);
+      vb.fromBufferAttribute(pos, ix[t + 1]).applyMatrix4(m.matrixWorld);
+      vc.fromBufferAttribute(pos, ix[t + 2]).applyMatrix4(m.matrixWorld);
+      const sd = sideEdge[(va.x + vb.x + vc.x) >= 0 ? 1 : -1];
+      for (const [p, q] of [[va, vb], [vb, vc], [vc, va]]){
+        const steps = Math.min(24, Math.max(1, Math.ceil(p.distanceTo(q) / 0.006)));
+        for (let k = 0; k <= steps; k++){ const f = k / steps; sd.push(p.x + (q.x - p.x) * f, p.y + (q.y - p.y) * f); }
+      }
+    }
+  }
+  for (const m of lens) m.removeFromParent();
+  const newLens = [];
+  for (const side of [1, -1]){
+    const P3 = sidePts[side]; if (P3.length < 9) continue;
+    const N = P3.length / 3;
+    let cx = 0, cy = 0; for (let i = 0; i < P3.length; i += 3){ cx += P3[i] / N; cy += P3[i + 1] / N; }
+    // contorno: el punto más lejano del centro en cada dirección
+    const BINS = 120, rad = new Float32Array(BINS), E = sideEdge[side];
+    for (let i = 0; i < E.length; i += 2){
+      const dx = E[i] - cx, dy = E[i + 1] - cy, ang = Math.atan2(dy, dx);
+      const bIdx = Math.floor(((ang + Math.PI) / (2 * Math.PI)) * BINS) % BINS;
+      rad[bIdx] = Math.max(rad[bIdx], Math.hypot(dx, dy));
+    }
+    for (let k = 0; k < BINS; k++) if (!rad[k]){ let l = k, r = k; while (!rad[(l + BINS - 1) % BINS] && l > k - BINS) l--; while (!rad[(r + 1) % BINS] && r < k + BINS) r++; rad[k] = (rad[(l + BINS - 1) % BINS] + rad[(r + 1) % BINS]) / 2; }
+    // quitar picos sueltos (mediana de 5) y suavizar un poco
+    const med = Float32Array.from(rad, (_, k) => [-2, -1, 0, 1, 2].map(o => rad[(k + o + BINS) % BINS]).sort((a, b) => a - b)[2]);
+    for (let k = 0; k < BINS; k++) rad[k] = (med[(k + BINS - 1) % BINS] + 2 * med[k] + med[(k + 1) % BINS]) / 4;
+    const outline = [];
+    for (let k = 0; k < BINS; k++){ const ang = -Math.PI + (k + 0.5) / BINS * 2 * Math.PI; outline.push([cx + rad[k] * Math.cos(ang), cy + rad[k] * Math.sin(ang)]); }
+    // plano medio de los lentes del modelo (respeta la curvatura frontal de la montura)
+    let sxx = 0, sxy = 0, syy = 0, sx = 0, sy = 0, sz = 0, sxz = 0, syz = 0;
+    for (let i = 0; i < P3.length; i += 3){ const x = P3[i] - cx, y = P3[i + 1] - cy, z = P3[i + 2]; sxx += x*x; sxy += x*y; syy += y*y; sx += x; sy += y; sz += z; sxz += x*z; syz += y*z; }
+    const det = sxx * syy - sxy * sxy;
+    const a2 = det ? (sxz * syy - syz * sxy) / det : 0, b2 = det ? (syz * sxx - sxz * sxy) / det : 0;
+    const plane = { a: a2, b: b2, d: sz / N - a2 * cx - b2 * cy };
+    const lm = new THREE.Mesh(makeLensGeometry(outline, plane), new THREE.MeshBasicMaterial());
+    lm.userData.esLente = true;
+    lm.scale.setScalar(1 / k);   // la geometría ya está en unidades de montura; holder vuelve a escalar por k
+    holder.add(lm);
+    newLens.push(lm);
+  }
+  lens.length = 0; lens.push(...newLens);
+
+  // Separar cada pieza en frente (aros, puente, bisagras) y patillas, para que el frente nunca lo corte la cara
+  holder.updateMatrixWorld(true);
+  const done = new Set();
+  for (const m of frame.slice()){
+    const g = m.geometry, pos = g.attributes.position;
+    if (done.has(g.uuid)) continue; done.add(g.uuid);
+    const index = g.index ? g.index.array : Array.from({ length: pos.count }, (_, i) => i);
+    const M = m.matrixWorld, a = new THREE.Vector3();   // holder no tiene padre: ya son unidades de montura
+    const front = [], back = [];
+    for (let t = 0; t < index.length; t += 3){
+      let z = 0;
+      for (let k = 0; k < 3; k++) z += a.fromBufferAttribute(pos, index[t + k]).applyMatrix4(M).z / 3;
+      (z > FRONT_Z ? front : back).push(index[t], index[t + 1], index[t + 2]);
+    }
+    if (!back.length) continue;
+    if (!front.length){ m.userData.patilla = true; continue; }
+    const gb = new THREE.BufferGeometry();
+    for (const [k, attr] of Object.entries(g.attributes)) gb.setAttribute(k, attr);
+    gb.setIndex(back);
+    g.setIndex(front);
+    const mb = new THREE.Mesh(gb, m.material);
+    mb.userData.patilla = true;
+    mb.position.copy(m.position); mb.quaternion.copy(m.quaternion); mb.scale.copy(m.scale);
+    m.parent.add(mb);
+  }
+
+  // Material principal de la montura (el que cubre más triángulos): es el que cambia de color
+  const count = new Map();
+  for (const m of frame){
+    const n = m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count;
+    for (const mt of [].concat(m.material)) count.set(mt.uuid, (count.get(mt.uuid) || 0) + n);
+  }
+  const mainUuid = [...count.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  return { holder, mainUuid, info: { rotY: Math.round(THREE.MathUtils.radToDeg(rotY)), anchoMm: Math.round(anchoM * 1000), lentes: lens.length } };
+}
+// </normalizar>
+
+function instantiateGLB(def, tpl, col){
+  const obj = tpl.holder.clone(true);
+  obj.userData.compartida = true;
+  lensMats = []; glareMats = [];
+  const clones = new Map();
+  const cloneMat = mt => {
+    if (!clones.has(mt.uuid)){
+      const c = mt.clone();
+      if (mt.uuid === tpl.mainUuid && col){
+        if (col.hex){ c.color.set(col.hex); }
+        if (col.rough != null) c.roughness = col.rough;
+        if (col.metal != null) c.metalness = col.metal;
+        c.needsUpdate = true;
+      }
+      clones.set(mt.uuid, c);
+    }
+    return clones.get(mt.uuid);
+  };
+  obj.traverse(o => {
+    if (!o.isMesh) return;
+    if (!o.userData.esReflejo && !o.userData.esLente) o.renderOrder = o.userData.patilla ? 0 : -2;
+    if (o.userData.esReflejo){
+      const gm = new THREE.MeshBasicMaterial({ map: glareTexture(), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+      gm.userData.k = 0.45; // los lentes 3D tienen cara frontal y trasera: el reflejo se ve doble
+      o.material = gm; o.renderOrder = 3; glareMats.push(gm);
+    } else if (o.userData.esLente){
+      o.material = makeLensMaterial();
+    } else {
+      o.material = Array.isArray(o.material) ? o.material.map(cloneMat) : cloneMat(o.material);
+    }
+  });
+  splayTemples(obj);
+  return obj;
+}
+
+/* ---------- Miniaturas de los modelos GLB ---------- */
+let thumbR = null, thumbScene, thumbCam;
+function thumbRenderer(){
+  if (thumbR) return thumbR;
+  thumbR = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  thumbR.setSize(480, 180, false);
+  thumbR.toneMapping = THREE.ACESFilmicToneMapping;
+  thumbScene = new THREE.Scene();
+  thumbScene.environment = new THREE.PMREMGenerator(thumbR).fromScene(new RoomEnvironment(), 0.04).texture;
+  thumbScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const d = new THREE.DirectionalLight(0xffffff, 1.6); d.position.set(0.3, 1, 1.5); thumbScene.add(d);
+  thumbCam = new THREE.OrthographicCamera(-0.56, 0.56, 0.21, -0.21, 0.01, 10);
+  thumbCam.position.set(0, 0.02, 3);
+  return thumbR;
+}
+async function renderGLBThumb(def, card){
+  try {
+    const tpl = await loadTemplate(def);
+    const r = thumbRenderer();
+    const saveL = lensMats, saveG = glareMats;
+    const obj = instantiateGLB(def, tpl, def.colores[0]);
+    lensMats = saveL; glareMats = saveG;
+    obj.rotation.y = 0.32;
+    // en la miniatura los lentes van casi transparentes (no hay fondo que se vea a través)
+    obj.traverse(o => { if (o.isMesh && o.userData.esLente) o.material = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.1 }); });
+    thumbScene.add(obj);
+    r.setClearColor(0x000000, 0);
+    r.render(thumbScene, thumbCam);
+    thumbScene.remove(obj); disposeGroup(obj);
+    const img = new Image(); img.alt = ''; img.src = r.domElement.toDataURL('image/png');
+    card.querySelector('.ph, canvas, img')?.replaceWith(img);
+  } catch (e){
+    console.error(e);
+    const ph = card.querySelector('.ph'); if (ph) ph.textContent = 'Error al cargar';
+  }
+}
+
+function toast(msg, ms = 5000){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, ms);
+}
+
+/* =========================================================
+   SEGUIMIENTO FACIAL
+   La pose de la cabeza sale de ajustar la cara canónica de MediaPipe
+   (468 puntos en cm) a los puntos detectados: así sabemos el giro real
+   y el tamaño real de la cara (píxeles por cm).
+   ========================================================= */
+
+class OneEuro {
+  constructor(minCutoff = 1.4, beta = 0.015, dCutoff = 1){ Object.assign(this, { minCutoff, beta, dCutoff }); this.t0 = null; }
+  static a(dt, c){ const tau = 1 / (2 * Math.PI * c); return 1 / (1 + tau / dt); }
+  reset(){ this.t0 = null; }
+  filter(x, t){
+    if (this.t0 === null){ this.t0 = t; this.x0 = x; this.dx0 = 0; return x; }
+    const dt = Math.max(1e-3, t - this.t0);
+    const dx = (x - this.x0) / dt;
+    const edx = this.dx0 + OneEuro.a(dt, this.dCutoff) * (dx - this.dx0);
+    const cutoff = this.minCutoff + this.beta * Math.abs(edx);
+    const ex = this.x0 + OneEuro.a(dt, cutoff) * (x - this.x0);
+    this.t0 = t; this.x0 = ex; this.dx0 = edx;
+    return ex;
+  }
+}
+// Filtros: quietos = estables; rápidos = sin retraso
+const FILT = { pos: [0.8, 0.05], scale: [0.5, 0.02], rot: [0.8, 12] };   // [corte mínimo Hz, beta]
+const fPos = [0, 1, 2].map(() => new OneEuro(...FILT.pos));
+const fScale = new OneEuro(...FILT.scale);
+const fRot = [0, 1, 2, 3].map(() => new OneEuro(...FILT.rot));
+const smoothQ = new THREE.Quaternion(); let haveQ = false;
+let lostFrames = 0;
+// Medidas de la cara de la persona (en cm de la cabeza), promediadas en el tiempo
+const fit = { pupilY: null, noseZ: null };
+/* Modelo personal: durante el primer segundo con la persona de frente se promedia la forma real de su cara.
+   Desde ahí la pose se calcula contra SU cara y no contra una cara promedio: menos error y menos temblor. */
+const personal = { acc: new Float64Array(468 * 3), n: 0, model: null, need: 30 };
+function resetPersonal(){ personal.acc.fill(0); personal.n = 0; personal.model = null; }
+function poseResidual(f, ref){
+  let e = 0;
+  for (const i of POSE_IDX){
+    let d2 = 0;
+    for (let r = 0; r < 3; r++){
+      const v = f.s * (f.R[r*3] * ref[i*3] + f.R[r*3+1] * ref[i*3+1] + f.R[r*3+2] * ref[i*3+2]) + f.t[r] - live[i*3+r];
+      d2 += v * v;
+    }
+    e += Math.sqrt(d2);
+  }
+  return e / POSE_IDX.length / f.s;   // cm
+}
+function resetTracking(){
+  fPos.forEach(f => f.reset()); fScale.reset(); fRot.forEach(f => f.reset());
+  haveQ = false; fit.pupilY = fit.noseZ = fit.distCm = null; HEAD.ratio = 1;
+}
+
+const live = new Float32Array(478 * 3);
+const _q = new THREE.Quaternion();
+const PUPIL_DROP_CM = 0.2;
+const CAM_HFOV = 62;   // campo de visión horizontal típico de una cámara frontal / webcam (grados)   // el centro del aro queda un poco por debajo de la pupila
+const LENS_GAP_CM = 0.25;    // el plano de los lentes, delante del puente de la nariz
+function toHead(f, i){
+  // punto detectado → cm de la cabeza:  R^T (p - t) / s
+  const R = f.R, x = live[i * 3] - f.t[0], y = live[i * 3 + 1] - f.t[1], z = live[i * 3 + 2] - f.t[2];
+  return [(R[0] * x + R[3] * y + R[6] * z) / f.s, (R[1] * x + R[4] * y + R[7] * z) / f.s, (R[2] * x + R[5] * y + R[8] * z) / f.s];
+}
+function ema(prev, v, a){ return prev == null ? v : prev + (v - prev) * a; }
+
+function track(lm, tSec){
+  const n = Math.min(478, lm.length);
+  for (let i = 0; i < n; i++){ live[i * 3] = lm[i].x * vw; live[i * 3 + 1] = (1 - lm[i].y) * vh; live[i * 3 + 2] = -lm[i].z * vw; }
+  const ref = personal.model || CANON_V;
+  const f = fitPose(live, ref);
+  // Calibración: con la cabeza de frente, acumular la forma de la cara en cm de la cabeza
+  if (!personal.model){
+    const yaw = Math.atan2(f.R[2], f.R[8]), pitch = Math.asin(-f.R[5]);
+    if (Math.abs(yaw) < 0.3 && Math.abs(pitch) < 0.3){
+      for (let i = 0; i < 468; i++){ const h = toHead(f, i); personal.acc[i*3] += h[0]; personal.acc[i*3+1] += h[1]; personal.acc[i*3+2] += h[2]; }
+      if (++personal.n >= personal.need){
+        const m = new Float32Array(468 * 3);
+        for (let k = 0; k < m.length; k++) m[k] = personal.acc[k] / personal.n;
+        personal.model = m;
+      }
+    }
+  }
+  if (state.debug) state.residual = poseResidual(f, ref);
+
+  // Rotación filtrada (componentes del cuaternión, sin saltos de signo)
+  _q.set(f.q[0], f.q[1], f.q[2], f.q[3]);
+  if (haveQ && smoothQ.dot(_q) < 0) _q.set(-_q.x, -_q.y, -_q.z, -_q.w);
+  smoothQ.set(fRot[0].filter(_q.x, tSec), fRot[1].filter(_q.y, tSec), fRot[2].filter(_q.z, tSec), fRot[3].filter(_q.w, tSec)).normalize();
+  haveQ = true;
+  anchor.position.set(fPos[0].filter(f.t[0], tSec), fPos[1].filter(f.t[1], tSec), fPos[2].filter(f.t[2], tSec));
+  anchor.quaternion.copy(smoothQ);
+  anchor.scale.setScalar(fScale.filter(f.s, tSec));
+
+  // Dónde van los lentes en ESTA cara: altura de las pupilas y profundidad del puente de la nariz
+  const eyesY = n >= 478 ? (toHead(f, 468)[1] + toHead(f, 473)[1]) / 2
+                         : (toHead(f, 33)[1] + toHead(f, 133)[1] + toHead(f, 362)[1] + toHead(f, 263)[1]) / 4;
+  const noseZ = toHead(f, 6)[2];
+  fit.pupilY = ema(fit.pupilY, eyesY, 0.06);
+  fit.noseZ = ema(fit.noseZ, noseZ, 0.06);
+  // Ancho de la cara de la persona frente a la cara canónica (de oreja a oreja): la cabeza se ensancha o angosta
+  const faceW = (toHead(f, 454)[0] - toHead(f, 234)[0]) / (CANON_V[454 * 3] - CANON_V[234 * 3]);
+  HEAD.ratio = THREE.MathUtils.clamp(ema(HEAD.ratio, faceW, 0.05), 0.85, 1.18);
+  if (headOcc) headOcc.scale.x = HEAD.ratio;
+  skull.scale.x = HEAD.halfWidthCm * HEAD.ratio * 0.95;
+  const gp = glassesPlacement();
+  glasses.position.set(0, gp.gy, gp.gz);
+  // Perspectiva: los lentes están ~2,5 cm más cerca de la cámara que el centro de la cara, así que se ven un poco
+  // más grandes; cuánto depende de la distancia (estimada con el tamaño del iris, ~11,7 mm en cualquier adulto).
+  if (n >= 478){
+    const d = (a, b) => Math.hypot(live[a*3] - live[b*3], live[a*3+1] - live[b*3+1]);
+    const irisPx = (d(469, 471) + d(470, 472) + d(474, 476) + d(475, 477)) / 4;
+    const fPx = (vw / 2) / Math.tan(THREE.MathUtils.degToRad(CAM_HFOV / 2));
+    if (irisPx > 4) fit.distCm = ema(fit.distCm, THREE.MathUtils.clamp(fPx * 1.17 / irisPx, 20, 250), 0.05);
+  }
+  const mag = fit.distCm ? THREE.MathUtils.clamp(fit.distCm / (fit.distCm - (gp.gz - 3.5)), 1, 1.12) : 1;
+  glasses.scale.setScalar(14 * state.fitScale * mag);
+  // Cuando las medidas de la cara cambian, volver a acomodar las patillas (como mucho cada 1,5 s)
+  const sa = current && current.userData.splayAt;
+  if (sa && tSec - (fit.lastSplay || 0) > 1.5 &&
+      (Math.abs(sa.gy - gp.gy) > 0.25 || Math.abs(sa.gz - gp.gz) > 0.25 || Math.abs(sa.ratio - HEAD.ratio) > 0.025 || sa.scale !== state.fitScale)){
+    fit.lastSplay = tSec;
+    setFrame(state.frame, state.color, { silent: true });
+  }
+
+  // Malla de la cara en cm de la cabeza, empujada unos milímetros hacia atrás
+  const arr = faceGeo.attributes.position.array;
+  for (let i = 0; i < 468; i++){
+    const h = toHead(f, i);
+    arr[i * 3] = h[0]; arr[i * 3 + 1] = h[1]; arr[i * 3 + 2] = h[2] - FACE_PUSH_CM;
+  }
+  faceGeo.attributes.position.needsUpdate = true;
+  faceGeo.computeBoundingSphere();
+  faceOcc.visible = true;
+
+  if (state.debug){
+    const d = dbgGeo.attributes.position.array;
+    for (let i = 0; i < n; i++){ d[i * 3] = live[i * 3]; d[i * 3 + 1] = live[i * 3 + 1]; d[i * 3 + 2] = 0; }
+    dbgGeo.attributes.position.needsUpdate = true;
+    state.lastPose = f;
+  }
+}
+
+let landmarker = null;
+async function initLandmarker(){
+  const fileset = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  const opts = delegate => ({
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+      delegate,
+    },
+    runningMode: 'VIDEO', numFaces: 1,
+    minFaceDetectionConfidence: 0.6, minFacePresenceConfidence: 0.6, minTrackingConfidence: 0.6,
+  });
+  try { landmarker = await FaceLandmarker.createFromOptions(fileset, opts('GPU')); }
+  catch (e){ console.warn('GPU no disponible, usando CPU', e); landmarker = await FaceLandmarker.createFromOptions(fileset, opts('CPU')); }
+}
+
+async function initCamera(){
+  if (!navigator.mediaDevices?.getUserMedia){
+    throw Object.assign(new Error('insecure'), { name: 'Insecure' });
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }, audio: false,
+  });
+  video.srcObject = stream;
+  await video.play();
+  await new Promise(r => video.videoWidth ? r() : video.addEventListener('loadedmetadata', r, { once: true }));
+  syncVideo();
+}
+
+/* ---------- Bucle ---------- */
+let lastVideoTime = -1, lastT = performance.now(), fps = 0;
+const hint = document.getElementById('hint');
+const debugEl = document.getElementById('debug');
+function loop(){
+  requestAnimationFrame(loop);
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  fps = fps * 0.9 + (1 / Math.max(dt, 1e-3)) * 0.1;
+  syncVideo();
+
+  if (landmarker && vw && video.currentTime !== lastVideoTime){
+    lastVideoTime = video.currentTime;
+    const res = landmarker.detectForVideo(video, now);
+    if (res.faceLandmarks && res.faceLandmarks.length){
+      if (lostFrames > 8) resetTracking();
+      if (lostFrames > 60) resetPersonal();   // más de 2 s sin cara: puede ser otra persona
+      lostFrames = 0;
+      track(res.faceLandmarks[0], now / 1000);
+      anchor.visible = true;
+    } else {
+      lostFrames++;
+      if (lostFrames > 8){ anchor.visible = false; faceOcc.visible = false; }
+    }
+    hint.hidden = anchor.visible;
+  }
+
+  // Animación Transitions (comprimida para la demo: en la vida real tarda ~30 s)
+  if (state.tint !== state.tintTarget){
+    const rate = state.tintTarget > state.tint ? 0.4 : 0.3;   // por segundo
+    const d = state.tintTarget - state.tint;
+    state.tint += Math.sign(d) * Math.min(Math.abs(d), rate * dt);
+    updateLens();
+  }
+
+  dbgPts.visible = state.debug;
+  if (state.debug){
+    const P = state.lastPose, R = P && P.R;
+    const pose = R ? `\ngiro ${(Math.atan2(R[2], R[8]) * 57.3).toFixed(0)}° · inclin. ${(Math.asin(-R[5]) * 57.3).toFixed(0)}° · ${P.s.toFixed(1)} px/cm` : '';
+    const cal = personal.model ? 'cara calibrada' : `calibrando ${personal.n}/${personal.need}`;
+    const res = (state.residual != null ? ` · error ${(state.residual * 10).toFixed(1)} mm` : '') + (fit.distCm ? ` · a ${fit.distCm.toFixed(0)} cm` : '');
+    debugEl.textContent = `MODO AJUSTE\nfps ${fps.toFixed(0)} · video ${vw}×${vh}${pose}\n${cal}${res}\nescala ${state.fitScale.toFixed(2)}  (+/−)\naltura ${state.fitOffY.toFixed(1)} cm  (W/S)\nprofundidad ${state.fitOffZ.toFixed(1)} cm  (Q/E)\noclusores ${state.showOcc ? 'visibles' : 'ocultos'}  (O)\nmontura ←/→${modelInfo()}`;
+  }
+  renderer.render(scene, camera);
+}
+
+/* =========================================================
+   INTERFAZ
+   ========================================================= */
+const framesEl = document.getElementById('frames');
+const swatchesEl = document.getElementById('swatches');
+
+function drawThumb(cv, def, col){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = 240, H = 90; cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, W, H);
+  const P = framePaths(def);
+  const k = (W - 16) / (P.halfWidth * 2);
+  const tx = x => W / 2 + x * k, ty = y => H / 2 - y * k;
+  const path = pts => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(tx(x), ty(y)) : g.moveTo(tx(x), ty(y))); g.closePath(); };
+  let fill = col.hex;
+  if (col.hex === 'carey'){ const gr = g.createLinearGradient(0, 0, W, H); gr.addColorStop(0, '#7a4418'); gr.addColorStop(.5, '#c98a3d'); gr.addColorStop(1, '#3a1d0a'); fill = gr; }
+  g.fillStyle = fill;
+  if (col.clear) g.globalAlpha = 0.6;
+  path(P.rOuter); g.fill(); path(P.lOuter); g.fill();
+  g.globalCompositeOperation = 'destination-out';
+  path(P.rInner); g.fill(); path(P.lInner); g.fill();
+  g.globalCompositeOperation = 'source-over';
+  g.strokeStyle = typeof fill === 'string' ? fill : '#a8692c';
+  g.lineWidth = def.metal ? 2.5 : 6; g.lineCap = 'round';
+  const by = P.topY * (def.metal ? 0.42 : 0.5);
+  g.beginPath(); g.moveTo(tx(def.bridge / 2), ty(by)); g.quadraticCurveTo(tx(0), ty(by + 0.04), tx(-def.bridge / 2), ty(by)); g.stroke();
+  g.globalAlpha = 1;
+}
+
+function buildFramesUI(){
+  framesEl.innerHTML = '';
+  FRAMES.forEach((def, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'frame-card'; b.id = 'frame-' + def.id;
+    const name = document.createElement('b'); name.textContent = def.nombre;
+    const meta = document.createElement('small'); meta.textContent = def.medidas;
+    b.addEventListener('click', () => setFrame(i, 0));
+    framesEl.append(b);
+    if (isGLB(def)){
+      const ph = document.createElement('div'); ph.className = 'ph'; ph.textContent = 'Cargando…';
+      b.append(ph, name, meta);
+      renderGLBThumb(def, b);
+    } else {
+      const cv = document.createElement('canvas');
+      b.append(cv, name, meta);
+      drawThumb(cv, def, def.colores[0]);
+    }
+  });
+  document.getElementById('frameCount').textContent = FRAMES.length + ' modelos';
+}
+
+function swatchBg(col){
+  if (col.hex === 'carey') return 'radial-gradient(circle at 30% 30%, #c98a3d, #6b3a14 55%, #2a1608)';
+  return col.muestra || col.hex || '#888';
+}
+function renderFrameUI(){
+  const def = FRAMES[state.frame], col = def.colores[state.color];
+  FRAMES.forEach((f, i) => document.getElementById('frame-' + f.id).setAttribute('aria-pressed', String(i === state.frame)));
+  swatchesEl.innerHTML = '';
+  def.colores.forEach((c, i) => {
+    const s = document.createElement('button');
+    s.type = 'button'; s.className = 'swatch'; s.style.background = swatchBg(c);
+    s.setAttribute('aria-label', c.n); s.setAttribute('aria-pressed', String(i === state.color));
+    s.addEventListener('click', () => setFrame(state.frame, i));
+    swatchesEl.append(s);
+  });
+  document.getElementById('colorName').textContent = col.n;
+  document.getElementById('nowName').textContent = def.nombre + ' · ' + col.n;
+  document.getElementById('nowInfo').textContent = def.estilo + ' · ' + def.medidas + ' · ' + def.ref;
+  const card = document.getElementById('frame-' + def.id);
+  card.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+}
+
+function chip(label, pressed, onClick, dotHex){
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'chip small';
+  if (dotHex){ const d = document.createElement('span'); d.className = 'dot'; d.style.background = dotHex; b.append(d); }
+  b.append(label);
+  b.setAttribute('aria-pressed', String(pressed));
+  b.addEventListener('click', onClick);
+  return b;
+}
+function buildTintUI(){
+  const tr = TR_BY[state.trType];
+  const types = document.getElementById('trTypes'); types.innerHTML = '';
+  for (const t of TR) types.append(chip(t.n, t.id === state.trType, () => {
+    state.trType = t.id; state.trColor = 0; state.mirror = 0;
+    // al elegir un tipo con color, mostrarlo activado
+    if (t.id !== 'claro' && state.tintTarget < 0.5){ state.tintTarget = 1; }
+    buildTintUI(); updateLens();
+  }));
+  document.getElementById('trDesc').textContent = tr.desc;
+  const cols = document.getElementById('trColors'); cols.innerHTML = '';
+  if (tr.colores.length > 1) tr.colores.forEach((c, i) => cols.append(chip(c.n, i === state.trColor, () => {
+    state.trColor = i; if (state.tintTarget < 0.5) state.tintTarget = 1; buildTintUI(); updateLens();
+  }, c.hex)));
+  const extra = document.getElementById('trExtra'); extra.innerHTML = '';
+  if (tr.acabados){
+    extra.append(chip('Degradado', state.degradado, () => { state.degradado = true; buildTintUI(); updateLens(); }));
+    extra.append(chip('Uniforme', !state.degradado, () => { state.degradado = false; buildTintUI(); updateLens(); }));
+  }
+  if (tr.espejos) tr.espejos.forEach((e, i) => extra.append(chip(e.n, i === state.mirror, () => { state.mirror = i; buildTintUI(); updateLens(); }, e.hex)));
+  document.getElementById('trLight').hidden = tr.id === 'claro';
+  document.getElementById('tint').hidden = tr.id === 'claro';
+  document.querySelector('.range-ends').hidden = tr.id === 'claro';
+}
+document.querySelectorAll('#trLight .chip').forEach(c => c.addEventListener('click', () => { state.tintTarget = +c.dataset.l; updateLens(); }));
+
+document.getElementById('tint').addEventListener('input', e => {
+  state.tint = state.tintTarget = e.target.value / 100;
+  updateLens();
+});
+
+function bindToggle(id, key){
+  const el = document.getElementById(id);
+  el.addEventListener('click', () => { state[key] = !state[key]; el.setAttribute('aria-pressed', String(state[key])); updateLens(); });
+}
+bindToggle('tgAR', 'ar');
+bindToggle('tgBlue', 'blue');
+
+document.getElementById('btnFull').addEventListener('click', async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch (e){ /* algunos navegadores no lo permiten */ }
+});
+
+/* ---------- Foto ---------- */
+const modal = document.getElementById('modal');
+document.getElementById('btnPhoto').addEventListener('click', () => {
+  renderer.render(scene, camera);
+  const src = renderer.domElement;
+  const out = document.createElement('canvas');
+  out.width = src.width; out.height = src.height;
+  const g = out.getContext('2d');
+  g.save(); g.translate(out.width, 0); g.scale(-1, 1); g.drawImage(src, 0, 0); g.restore();
+  const def = FRAMES[state.frame], col = def.colores[state.color];
+  const pad = Math.round(out.width * 0.03), fs = Math.max(14, Math.round(out.width * 0.028));
+  g.fillStyle = 'rgba(14,17,19,.78)'; g.fillRect(0, out.height - fs * 3.2, out.width, fs * 3.2);
+  g.fillStyle = '#eef1f2'; g.font = `600 ${fs}px Sora, sans-serif`;
+  g.fillText(`${def.nombre} · ${col.n}`, pad, out.height - fs * 1.75);
+  g.fillStyle = '#d6a15a'; g.font = `500 ${Math.round(fs * 0.7)}px Manrope, sans-serif`;
+  const trd = TR_BY[state.trType], trc = trd.colores[state.trColor] || trd.colores[0];
+  const mirN = trd.espejos && state.mirror ? ' espejo ' + trd.espejos[state.mirror].n.toLowerCase() : '';
+  const lens = [trd.id !== 'claro' ? `Transitions ${trd.n}${trc.n !== trd.n ? ' ' + trc.n : ''}${mirN}` : null, state.ar ? 'Antirreflejo' : null, state.blue ? 'Luz azul' : null].filter(Boolean).join(' · ');
+  g.fillText(`${def.medidas} · ${def.ref}${lens ? ' · ' + lens : ''}`, pad, out.height - fs * 0.75);
+  const url = out.toDataURL('image/png');
+  document.getElementById('photoImg').src = url;
+  const save = document.getElementById('btnSave');
+  save.href = url; save.download = `probador-${def.id}.png`;
+  const fl = document.getElementById('flash');
+  fl.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => fl.classList.remove('on')));
+  setTimeout(() => { modal.hidden = false; }, 250);
+});
+document.getElementById('btnClose').addEventListener('click', () => { modal.hidden = true; });
+
+/* ---------- Teclado (para la demo en laptop) ---------- */
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowRight') setFrame(state.frame + 1);
+  else if (e.key === 'ArrowLeft') setFrame(state.frame - 1);
+  else if (e.key === 'd' || e.key === 'D') setAdmin(!state.debug);
+  else if (!state.debug) return;
+  else if (e.key === '+' || e.key === '=') { state.fitScale += 0.02; if (current) updateSkull(current); }
+  else if (e.key === '-') { state.fitScale -= 0.02; if (current) updateSkull(current); }
+  else if (e.key === 'w' || e.key === 'W') state.fitOffY += 0.1;
+  else if (e.key === 's' || e.key === 'S') state.fitOffY -= 0.1;
+  else if (e.key === 'q' || e.key === 'Q') state.fitOffZ += 0.1;
+  else if (e.key === 'e' || e.key === 'E') state.fitOffZ -= 0.1;
+  else if (e.key === 'o' || e.key === 'O'){ state.showOcc = !state.showOcc; setOccluderDebug(state.showOcc); }
+  else if (e.key === 'r' || e.key === 'R'){
+    const def = FRAMES[state.frame];
+    if (!isGLB(def)) return;
+    def.giroExtra = ((def.giroExtra || 0) + 90) % 360;
+    def._tpl = null;
+    setFrame(state.frame, state.color);
+    renderGLBThumb(def, document.getElementById('frame-' + def.id));
+  }
+});
+
+/* ---------- Modo ajuste (solo para el personal de la óptica) ----------
+   Teclado: D. Pantalla táctil: 5 toques seguidos sobre el nombre de la óptica. */
+function setAdmin(on){
+  state.debug = on;
+  debugEl.hidden = !on;
+  document.getElementById('uploadChip').hidden = !on;
+  if (!on && state.showOcc){ state.showOcc = false; setOccluderDebug(false); }
+  toast(on ? 'Modo ajuste activado' : 'Modo ajuste desactivado', 1800);
+}
+let taps = [];
+document.getElementById('brand').addEventListener('click', () => {
+  const t = performance.now();
+  taps = taps.filter(x => t - x < 2500); taps.push(t);
+  if (taps.length >= 5){ taps = []; setAdmin(!state.debug); }
+});
+
+function modelInfo(){
+  const def = FRAMES[state.frame];
+  if (!isGLB(def) || !def._info) return '';
+  return `\nmodelo: giro ${def._info.rotY}° (R)\nancho ${def._info.anchoMm} mm · lentes ${def._info.lentes}`;
+}
+
+/* ---------- Cargar un modelo propio ---------- */
+let propios = 0;
+document.getElementById('fileGlb').addEventListener('change', async e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (!/\.glb$/i.test(file.name)){ toast('Ese archivo no es .glb. Exporta desde Blender como «glTF Binary (.glb)».'); return; }
+  const def = {
+    id: 'propio-' + (++propios), nombre: file.name.replace(/\.glb$/i, ''), estilo: 'Modelo cargado', ref: '—',
+    medidas: 'Medidas del archivo', colores: [{ n: 'Original', muestra: '#7d868c' }], _buf: await file.arrayBuffer(),
+  };
+  FRAMES.push(def);
+  buildFramesUI();
+  await setFrame(FRAMES.length - 1, 0);
+  if (def._info && def._info.lentes === 0) toast('Modelo cargado, pero no encontré lentes. Nombra el objeto de los lentes «lente» para que funcionen Transitions y los tratamientos.', 7000);
+});
+
+/* ---------- Arranque ---------- */
+buildFramesUI();
+buildTintUI();
+loadHead();
+loadEnvironment();
+setFrame(0, 0);
+fitCamera();
+
+const statusEl = document.getElementById('status');
+const btnStart = document.getElementById('btnStart');
+btnStart.addEventListener('click', async () => {
+  btnStart.disabled = true;
+  statusEl.className = 'status';
+  try {
+    statusEl.textContent = 'Encendiendo la cámara…';
+    await initCamera();
+    statusEl.textContent = 'Cargando el seguimiento facial…';
+    await initLandmarker();
+    document.getElementById('start').hidden = true;
+    fitCamera();
+  } catch (e){
+    console.error(e);
+    btnStart.disabled = false;
+    statusEl.className = 'status err';
+    const msgs = {
+      NotAllowedError: 'La cámara está bloqueada. Permite el acceso a la cámara en el navegador y vuelve a tocar Empezar.',
+      NotFoundError: 'No se encontró ninguna cámara conectada.',
+      NotReadableError: 'Otra aplicación está usando la cámara. Ciérrala y vuelve a intentar.',
+      Insecure: 'El navegador no permite usar la cámara aquí. Abre el archivo en Chrome o Edge, o publícalo en un sitio con https.',
+    };
+    statusEl.textContent = msgs[e.name] || ('No se pudo iniciar: ' + (e.message || e));
+  }
+});
+
+// Acceso para pruebas desde la consola del navegador
+window.__probador = { loadEnvironment, personal, updateLens, buildTintUI, FILT, fPos, fRot, fScale, THREE, renderer, camera, scene, videoMesh, state, anchor, skull, faceOcc, glasses, fit, HEAD, get headOcc(){ return headOcc; }, get current(){ return current; } };
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

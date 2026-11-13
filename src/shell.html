@@ -65,8 +65,6 @@ button:focus-visible,input:focus-visible,label:focus-visible{outline:2px solid v
 #introGl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
 .intro-shadow{position:absolute;left:var(--glasses-x,50%);top:calc(var(--glasses-y,44%) + var(--shadow-off,15vmin));width:52vmin;height:5vmin;transform:translateX(-50%);
   border-radius:50%;background:radial-gradient(closest-side,rgba(30,36,48,.22),transparent);filter:blur(6px);pointer-events:none;transition:opacity .4s}
-.intro-num{position:absolute;left:max(4vw,env(safe-area-inset-left,0px));top:var(--num-top,20%);font-family:var(--font-display);font-weight:200;
-  font-size:clamp(120px,28vmin,360px);line-height:.8;letter-spacing:-.04em;color:var(--ghost);pointer-events:none;user-select:none;font-variant-numeric:tabular-nums}
 .intro-top{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;justify-content:space-between;gap:16px;
   padding:calc(22px + env(safe-area-inset-top,0px)) max(28px,env(safe-area-inset-right,0px)) 0 max(28px,env(safe-area-inset-left,0px));font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft)}
 .brand{display:flex;align-items:center;gap:10px;color:var(--ink);font-weight:700;letter-spacing:.18em;user-select:none;-webkit-user-select:none;cursor:default}
@@ -97,64 +95,67 @@ button:focus-visible,input:focus-visible,label:focus-visible{outline:2px solid v
 .status{min-height:1.3em;margin:0;font-size:14px;color:var(--ink-soft);text-align:center}
 .status.err{color:#b4262b;max-width:52ch;line-height:1.5}
 .credits{margin:0;font-size:10.5px;color:var(--glass-soft);line-height:1.45}
+.intro-credits{position:absolute;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(640px,calc(100vw - 40px));text-align:center;color:var(--ink-soft);opacity:.7;font-size:clamp(10px,1.2vmin,12px)}
 
-/* ============== PROBADOR ============== */
+/* ============== PROBADOR ==============
+   Cámara libre en el centro. Todo vive en una barra inferior (como una app de cámara) y en un panel
+   compacto que aparece encima de ella solo cuando se necesita. */
 .app{background:#05070a;color:#fff}
 .stage{position:absolute;inset:0;overflow:hidden;background:#000}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;transform:scaleX(-1)}
-.app-top{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:5;
-  padding:calc(18px + env(safe-area-inset-top,0px)) max(18px,env(safe-area-inset-right,0px)) 0 max(18px,env(safe-area-inset-left,0px))}
-.app-top .glass{padding:12px 18px;display:inline-flex;align-items:center;gap:10px;font-weight:600;font-size:clamp(13px,1.7vmin,17px)}
-.app-top svg{width:18px;height:18px}
-.now{flex-direction:column;align-items:flex-start!important;gap:2px!important;max-width:46vw;min-width:0}
-.now b{font-family:var(--font-display);font-weight:600;font-size:clamp(14px,1.9vmin,19px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.now span{font-size:clamp(11px,1.3vmin,13px);color:var(--glass-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.dial-pill[aria-pressed="false"]{opacity:.7}
-@media (max-width:600px){
-  .now span,.dial-pre{display:none}
-  .app-top .glass{padding:11px 14px}
-  .now{max-width:38vw}
-}
-.rail{position:absolute;right:max(16px,env(safe-area-inset-right,0px));top:50%;transform:translateY(-62%);display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:30px;z-index:5}
-.rail button{width:clamp(56px,7.4vmin,78px);height:clamp(56px,7.4vmin,78px);border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:clamp(10px,1.15vmin,12px);font-weight:600;color:#fff;transition:background .25s}
-.rail svg{width:24px;height:24px}
-.rail button[aria-selected="true"]{background:rgba(255,255,255,.92);color:var(--ink);text-shadow:none}
-.sheet{position:absolute;left:max(16px,env(safe-area-inset-left,0px));right:calc(max(16px,env(safe-area-inset-right,0px)) + clamp(72px,9vmin,96px) + 14px);bottom:calc(18px + env(safe-area-inset-bottom,0px));
-  border-radius:var(--r-card);padding:18px 20px 20px;z-index:5;max-height:42vh;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:14px;transition:transform .45s cubic-bezier(.2,.8,.2,1),opacity .3s}
-.sheet.closed{transform:translateY(calc(100% + 30px));opacity:0;pointer-events:none}
-@media (orientation:landscape){ .sheet{right:auto;width:min(620px,56vw)} }
-.sheet h2{margin:0;font-family:var(--font-display);font-weight:600;font-size:clamp(15px,2vmin,20px);display:flex;justify-content:space-between;align-items:baseline;gap:10px}
-.sheet h2 small{font-family:var(--font-body);font-weight:500;font-size:13px;color:var(--glass-soft);font-variant-numeric:tabular-nums}
-.tab{display:flex;flex-direction:column;gap:12px}
-.row{display:flex;gap:8px;flex-wrap:wrap}
-.chip{display:inline-flex;align-items:center;gap:8px;border-radius:var(--r-pill);padding:11px 16px;font-weight:600;font-size:clamp(13px,1.6vmin,16px);
+.round{width:clamp(52px,6.2vmin,64px);height:clamp(52px,6.2vmin,64px);border-radius:50%;display:grid;place-items:center}
+.round svg{width:22px;height:22px}
+#btnHome{position:absolute;left:max(18px,env(safe-area-inset-left,0px));top:calc(18px + env(safe-area-inset-top,0px));z-index:5}
+.gesture-chip{position:absolute;right:max(18px,env(safe-area-inset-right,0px));top:calc(18px + env(safe-area-inset-top,0px));z-index:5;
+  display:inline-flex;align-items:center;gap:8px;padding:11px 16px;font-weight:600;font-size:clamp(13px,1.6vmin,16px)}
+.gesture-chip svg{width:18px;height:18px}
+.gesture-chip[aria-pressed="false"]{opacity:.65}
+.now{position:absolute;left:50%;top:calc(22px + env(safe-area-inset-top,0px));transform:translate(-50%,-8px);opacity:0;z-index:5;pointer-events:none;
+  padding:10px 18px;font-family:var(--font-display);font-weight:600;font-size:clamp(14px,1.8vmin,18px);white-space:nowrap;max-width:56vw;overflow:hidden;text-overflow:ellipsis;transition:opacity .35s,transform .35s}
+.now.show{opacity:1;transform:translate(-50%,0)}
+.dock{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:6;display:flex;align-items:center;gap:clamp(4px,1vmin,10px);padding:8px 10px;border-radius:999px}
+.dock .tabbtn{width:clamp(62px,8.4vmin,86px);height:clamp(56px,7vmin,70px);border-radius:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:clamp(10.5px,1.25vmin,13px);font-weight:600;color:#fff;transition:background .25s,color .25s}
+.dock .tabbtn svg{width:clamp(21px,2.6vmin,26px);height:clamp(21px,2.6vmin,26px)}
+.dock .tabbtn[aria-selected="true"]{background:rgba(255,255,255,.92);color:var(--ink);text-shadow:none}
+.shutter{width:clamp(70px,9vmin,92px);height:clamp(70px,9vmin,92px);border-radius:50%;display:grid;place-items:center;margin-inline:clamp(2px,.8vmin,8px);
+  background:rgba(255,255,255,.18);border:3px solid rgba(255,255,255,.9);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.shutter span{width:76%;height:76%;border-radius:50%;background:#fff;transition:transform .15s}
+.shutter:active span{transform:scale(.86)}
+.sheet{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px) + clamp(72px,9.4vmin,98px) + 14px);transform:translateX(-50%);
+  width:min(760px,calc(100vw - 32px));border-radius:var(--r-card);padding:16px 18px;z-index:5;max-height:min(34vh,360px);overflow-y:auto;overscroll-behavior:contain;
+  display:flex;flex-direction:column;gap:12px;transition:transform .4s cubic-bezier(.2,.8,.2,1),opacity .25s}
+.sheet.closed{transform:translate(-50%,24px);opacity:0;pointer-events:none}
+.sheet h2{margin:0;font-family:var(--font-display);font-weight:600;font-size:clamp(14px,1.8vmin,18px);display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.sheet h2 small{font-family:var(--font-body);font-weight:500;font-size:13px;color:var(--glass-soft);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tab{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;margin-inline:-4px;padding-inline:4px}
+.row::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;border-radius:var(--r-pill);padding:11px 16px;font-weight:600;font-size:clamp(13px,1.55vmin,16px);white-space:nowrap;
   background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.26);color:#fff;transition:background .2s,color .2s}
 .chip.small{padding:10px 14px}
 .chip[aria-pressed="true"]{background:rgba(255,255,255,.94);color:var(--ink);text-shadow:none;border-color:#fff}
 .dot{width:12px;height:12px;border-radius:50%;display:inline-block;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4)}
-.tr-desc{margin:0;font-size:clamp(12.5px,1.5vmin,15px);line-height:1.5;color:var(--glass-soft)}
-.frames{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x proximity;scrollbar-width:none}
+.seg{display:flex;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);border-radius:var(--r-pill);padding:4px;gap:4px}
+.seg .chip{flex:1 1 0;justify-content:center;background:transparent;border-color:transparent}
+.seg .chip[aria-pressed="true"]{background:rgba(255,255,255,.94);border-color:#fff}
+.tr-desc{display:none}
+.frames{display:flex;gap:10px;overflow-x:auto;padding-bottom:2px;scroll-snap-type:x proximity;scrollbar-width:none}
 .frames::-webkit-scrollbar{display:none}
-.frame-card{flex:0 0 clamp(150px,20vmin,210px);scroll-snap-align:start;border-radius:20px;padding:12px;display:flex;flex-direction:column;gap:6px;text-align:left;
+.frame-card{flex:0 0 clamp(124px,16vmin,170px);scroll-snap-align:start;border-radius:18px;padding:10px;display:flex;flex-direction:column;gap:4px;text-align:left;
   background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24);color:#fff;transition:background .2s}
-.frame-card img,.frame-card canvas{width:100%;height:clamp(54px,7vmin,76px);object-fit:contain;display:block;filter:drop-shadow(0 6px 10px rgba(0,0,0,.25))}
-.frame-card .ph{height:clamp(54px,7vmin,76px);display:grid;place-items:center;font-size:11px;color:var(--glass-soft)}
-.frame-card b{font-family:var(--font-display);font-weight:600;font-size:clamp(13px,1.6vmin,16px)}
-.frame-card small{font-size:12px;color:var(--glass-soft);font-variant-numeric:tabular-nums}
+.frame-card img,.frame-card canvas{width:100%;height:clamp(42px,5.6vmin,62px);object-fit:contain;display:block;filter:drop-shadow(0 6px 10px rgba(0,0,0,.25))}
+.frame-card .ph{height:clamp(42px,5.6vmin,62px);display:grid;place-items:center;font-size:11px;color:var(--glass-soft)}
+.frame-card b{font-family:var(--font-display);font-weight:600;font-size:clamp(12.5px,1.5vmin,15px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frame-card small{font-size:11.5px;color:var(--glass-soft);font-variant-numeric:tabular-nums}
 .frame-card[aria-pressed="true"]{background:rgba(255,255,255,.9);color:var(--ink);text-shadow:none}
 .frame-card[aria-pressed="true"] small{color:var(--ink-soft)}
-.swatches{display:flex;gap:14px;flex-wrap:wrap}
-.swatch{width:clamp(48px,6.4vmin,64px);height:clamp(48px,6.4vmin,64px);border-radius:50%;border:2px solid rgba(255,255,255,.5);box-shadow:0 6px 16px rgba(0,0,0,.25)}
+.swatches{display:flex;gap:14px;overflow-x:auto;padding:6px 4px}
+.swatch{flex:0 0 auto;width:clamp(46px,6vmin,60px);height:clamp(46px,6vmin,60px);border-radius:50%;border:2px solid rgba(255,255,255,.5);box-shadow:0 6px 16px rgba(0,0,0,.25)}
 .swatch[aria-pressed="true"]{outline:3px solid #fff;outline-offset:4px}
-input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:40px;background:transparent}
-input[type=range]::-webkit-slider-runnable-track{height:12px;border-radius:99px;background:linear-gradient(90deg,rgba(255,255,255,.95),rgba(40,44,52,.9));border:1px solid rgba(255,255,255,.4)}
-input[type=range]::-moz-range-track{height:12px;border-radius:99px;background:linear-gradient(90deg,rgba(255,255,255,.95),rgba(40,44,52,.9))}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:34px;height:34px;border-radius:50%;background:#fff;margin-top:-12px;box-shadow:0 4px 14px rgba(0,0,0,.35),inset 0 0 0 6px rgba(122,162,255,.35)}
-input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;background:#fff;border:0}
-.range-ends{display:flex;justify-content:space-between;font-size:12px;color:var(--glass-soft);margin-top:-8px}
+#tint,.range-ends{display:none!important}
 .toggles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media (max-width:520px){ .toggles{grid-template-columns:1fr} }
-.toggle{display:flex;align-items:center;justify-content:space-between;gap:14px;border-radius:20px;padding:14px 16px;text-align:left;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24)}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:14px;border-radius:20px;padding:13px 16px;text-align:left;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24)}
 .toggle div{display:flex;flex-direction:column;gap:3px;min-width:0}
 .toggle b{font-size:clamp(14px,1.7vmin,17px)}
 .toggle small{font-size:12.5px;color:var(--glass-soft)}
@@ -163,13 +164,17 @@ input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;bac
 .toggle[aria-pressed="true"] .switch{background:linear-gradient(90deg,var(--iri-1),var(--iri-2))}
 .toggle[aria-pressed="true"] .switch::after{transform:translateX(20px)}
 .upload{align-self:flex-start;border-style:dashed!important;cursor:pointer}
-.shutter{position:absolute;right:max(18px,env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));width:clamp(72px,9vmin,96px);height:clamp(72px,9vmin,96px);border-radius:50%;z-index:6;display:grid;place-items:center}
-.shutter span{width:62%;height:62%;border-radius:50%;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.25);transition:transform .15s}
-.shutter:active span{transform:scale(.86)}
-.hint{position:absolute;left:50%;top:22%;transform:translateX(-50%);padding:14px 24px;font-weight:600;font-size:clamp(14px,1.9vmin,19px);white-space:nowrap;z-index:4}
+.hint{position:absolute;left:50%;top:24%;transform:translateX(-50%);padding:14px 24px;font-weight:600;font-size:clamp(14px,1.9vmin,19px);white-space:nowrap;z-index:4}
 .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .35s;z-index:8}
 .flash.on{opacity:.85;transition:none}
 .debug{position:absolute;left:16px;top:calc(90px + env(safe-area-inset-top,0px));background:rgba(0,0,0,.72);color:#fff;font:12px/1.5 ui-monospace,Consolas,monospace;padding:10px 12px;border-radius:10px;white-space:pre;z-index:9}
+/* durante la cuenta regresiva solo se ve la cámara */
+.app.posing .dock,.app.posing .sheet,.app.posing #btnHome,.app.posing .gesture-chip,.app.posing .now{opacity:0!important;pointer-events:none}
+.app .dock,.app #btnHome,.app .gesture-chip{transition:opacity .3s}
+.countdown{position:absolute;left:50%;top:50%;width:clamp(150px,22vmin,230px);height:clamp(150px,22vmin,230px);border-radius:50%;transform:translate(-50%,-50%);z-index:8;
+  display:grid;place-items:center;font-family:var(--font-display);font-weight:200;font-size:clamp(80px,12vmin,130px);pointer-events:none}
+.countdown b{font-weight:300;display:block;animation:tick 1s ease-out}
+@keyframes tick{from{transform:scale(1.5);opacity:0}25%{opacity:1}to{transform:scale(.9);opacity:.9}}
 
 /* Dial de gestos */
 .dial{position:absolute;width:clamp(220px,30vmin,320px);height:clamp(220px,30vmin,320px);border-radius:50%;transform:translate(-50%,-50%) scale(.85);opacity:0;
@@ -180,7 +185,7 @@ input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;bac
 .dial-center small{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--glass-soft)}
 .dial-center b{font-family:var(--font-display);font-weight:600;font-size:clamp(16px,2.3vmin,22px);line-height:1.15}
 .dial-center span{font-size:12px;color:var(--glass-soft)}
-.hand-cursor{position:absolute;width:34px;height:34px;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:7;opacity:0;transition:opacity .2s,width .15s,height .15s}
+.hand-cursor{position:absolute;left:0;top:0;width:34px;height:34px;border-radius:50%;will-change:transform;pointer-events:none;z-index:7;opacity:0;transition:opacity .2s,width .15s,height .15s}
 .hand-cursor.on{opacity:1}
 .hand-cursor.pinch{width:22px;height:22px;background:rgba(255,255,255,.9)}
 
@@ -232,6 +237,7 @@ input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;bac
     </button>
     <p class="status" id="status" role="status"></p>
   </div>
+<p class="credits intro-credits">Modelos 3D de prueba (Sketchfab, CC BY 4.0, adaptados): «Anteojos» de Orking, «Glasses» de AlbertVictory y «Glasses» de C.U.V. Cabeza para oclusión: «Male Head» de Alexander Antipov (CC BY 4.0). Entorno: Poly Haven (CC0). Malla facial: MediaPipe (Apache 2.0).</p>
 </section>
 
 <!-- ===================== PROBADOR ===================== -->
@@ -243,29 +249,16 @@ input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;bac
     <div class="debug" id="debug" hidden></div>
   </div>
 
-  <header class="app-top">
-    <button class="glass pill lg" id="btnHome" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>Inicio</button>
-    <div class="glass pill now lg" id="nowPill"><b id="nowName">—</b><span id="nowInfo">—</span></div>
-    <button class="glass pill dial-pill lg" id="btnDial" type="button" aria-pressed="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11m0-1.5V4a1.5 1.5 0 0 1 3 0v6m0-4.5a1.5 1.5 0 0 1 3 0V12m0-3.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-5-2.7L3.6 14a1.6 1.6 0 0 1 2.5-2l1.9 2"/></svg>
-      <span class="dial-pre">Dial:</span><span id="dialLabel">Gestos</span>
-    </button>
-  </header>
+  <button class="glass round lg" id="btnHome" type="button" aria-label="Volver al inicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+  <div class="glass pill now lg" id="nowPill" role="status"><b id="nowName">—</b></div>
+  <button class="glass pill gesture-chip lg" id="btnDial" type="button" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11m0-1.5V4a1.5 1.5 0 0 1 3 0v6m0-4.5a1.5 1.5 0 0 1 3 0V12m0-3.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-5-2.7L3.6 14a1.6 1.6 0 0 1 2.5-2l1.9 2"/></svg><span id="dialLabel">Gestos</span></button>
 
-  <nav class="glass rail lg" id="rail" role="tablist" aria-label="Opciones">
-    <button type="button" role="tab" data-tab="monturas" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6.5" cy="13" r="3.8"/><circle cx="17.5" cy="13" r="3.8"/><path d="M10.3 12.4c1.1-.8 2.3-.8 3.4 0M2.7 12 2 9.5M21.3 12l.7-2.5"/></svg>Monturas</button>
-    <button type="button" role="tab" data-tab="color" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.6-1.2 1-2-.6-1-.2-2.3 1.2-2.3H17a4 4 0 0 0 4-4C21 7 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7.5" r="1.2" fill="currentColor"/><circle cx="15" cy="7.8" r="1.2" fill="currentColor"/></svg>Color</button>
-    <button type="button" role="tab" data-tab="transitions" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>Transitions</button>
-    <button type="button" role="tab" data-tab="tratamientos" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l7 3v5.5c0 4.4-3 7.8-7 9.5-4-1.7-7-5.1-7-9.5V6z"/><path d="M8.8 12.2l2.2 2.2 4.2-4.6"/></svg>Lentes</button>
-  </nav>
-
-  <div class="glass sheet lg" id="sheet">
-    <div class="tab" data-tab="monturas">
+  <div class="glass sheet lg closed" id="sheet">
+    <div class="tab" data-tab="monturas" hidden>
       <h2>Monturas <small id="frameCount"></small></h2>
       <div class="frames" id="frames"></div>
       <label class="chip upload" for="fileGlb" id="uploadChip" hidden>Probar un modelo propio (.glb)</label>
       <input type="file" id="fileGlb" accept=".glb,model/gltf-binary" hidden>
-      <p class="credits">Modelos 3D de prueba (Sketchfab, CC BY 4.0, adaptados): «Anteojos» de Orking, «Glasses» de AlbertVictory y «Glasses» de C.U.V. Cabeza para oclusión: «Male Head» de Alexander Antipov (CC BY 4.0). Entorno: Poly Haven (CC0). Malla facial: MediaPipe (Apache 2.0).</p>
     </div>
     <div class="tab" data-tab="color" hidden>
       <h2>Color de la montura <small id="colorName"></small></h2>
@@ -273,15 +266,15 @@ input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;bac
     </div>
     <div class="tab" data-tab="transitions" hidden>
       <h2>Transitions <small id="tintValue">Interior</small></h2>
-      <div class="row" id="trTypes"></div>
-      <p class="tr-desc" id="trDesc"></p>
-      <div class="row" id="trColors"></div>
-      <div class="row" id="trExtra"></div>
-      <div class="row" id="trLight">
+      <div class="seg" id="trLight">
         <button class="chip" type="button" data-l="0">Interior</button>
         <button class="chip" type="button" data-l="0.5">En el carro</button>
         <button class="chip" type="button" data-l="1">Al sol</button>
       </div>
+      <div class="row" id="trTypes"></div>
+      <div class="row" id="trColors"></div>
+      <div class="row" id="trExtra"></div>
+      <p class="tr-desc" id="trDesc"></p>
       <input type="range" id="tint" min="0" max="100" value="0" aria-label="Cantidad de luz">
       <div class="range-ends"><span>Interior</span><span>Carro</span><span>Sol directo</span></div>
     </div>
@@ -294,8 +287,15 @@ input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;bac
     </div>
   </div>
 
-  <button class="glass shutter lg" id="btnPhoto" type="button" aria-label="Tomar foto"><span></span></button>
+  <nav class="glass dock lg" id="dock" role="tablist" aria-label="Opciones">
+    <button class="tabbtn" type="button" role="tab" data-tab="monturas" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6.5" cy="13" r="3.8"/><circle cx="17.5" cy="13" r="3.8"/><path d="M10.3 12.4c1.1-.8 2.3-.8 3.4 0M2.7 12 2 9.5M21.3 12l.7-2.5"/></svg>Monturas</button>
+    <button class="tabbtn" type="button" role="tab" data-tab="color" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.6-1.2 1-2-.6-1-.2-2.3 1.2-2.3H17a4 4 0 0 0 4-4C21 7 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7.5" r="1.2" fill="currentColor"/><circle cx="15" cy="7.8" r="1.2" fill="currentColor"/></svg>Color</button>
+    <button class="shutter" id="btnPhoto" type="button" aria-label="Tomar foto con cuenta regresiva"><span></span></button>
+    <button class="tabbtn" type="button" role="tab" data-tab="transitions" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>Transitions</button>
+    <button class="tabbtn" type="button" role="tab" data-tab="tratamientos" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l7 3v5.5c0 4.4-3 7.8-7 9.5-4-1.7-7-5.1-7-9.5V6z"/><path d="M8.8 12.2l2.2 2.2 4.2-4.6"/></svg>Lentes</button>
+  </nav>
 
+  <div class="countdown glass lg" id="countdown" hidden></div>
   <div class="dial glass" id="dial" aria-hidden="true">
     <svg viewBox="-100 -100 200 200" id="dialSvg"></svg>
     <div class="dial-center"><small id="dialParam">Oscuridad</small><b id="dialValue">Interior</b><span id="dialHint">Gira la mano</span></div>
@@ -309,6 +309,7 @@ input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;bac
     <img id="photoImg" alt="Foto con la montura puesta">
     <div class="modal-actions">
       <button class="btn" id="btnClose" type="button">Cerrar</button>
+      <button class="btn" id="btnRetake" type="button">Repetir</button>
       <a class="btn primary" id="btnSave" download="probador.png" href="#">Guardar foto</a>
     </div>
   </div>
@@ -325,6 +326,8 @@ input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;bac
         <div><b>Gira la mano</b><span>Hacia la derecha sube, hacia la izquierda baja. Suelta para dejarlo así.</span></div></li>
       <li><svg viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M22 36V18m8 16V12m8 22V14m8 22V22M18 38c0 10 6 16 16 16s14-6 14-16"/></svg>
         <div><b>Abre la mano un segundo</b><span>Cambias lo que controla el dial: oscuridad del lente, color de la montura, montura o color del lente.</span></div></li>
+      <li><svg viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M26 34V12m10 22V14M24 36c-4 0-6 3-6 7 0 7 6 11 14 11s14-5 14-12v-6c0-3-3-4-5-2"/><path d="M36 34l5-1"/></svg>
+        <div><b>Haz ✌️ con la mano</b><span>Arranca la foto con cuenta regresiva de 3 segundos. También con el botón blanco del centro.</span></div></li>
     </ol>
     <div class="modal-actions"><button class="btn primary" id="btnHelpClose" type="button">Entendido</button></div>
   </div>

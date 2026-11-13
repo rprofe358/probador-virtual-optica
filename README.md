@@ -2,13 +2,14 @@
 
 Prototipo de probador de monturas con realidad aumentada para una óptica. Corre en el navegador con la cámara del dispositivo: seguimiento facial con MediaPipe y render 3D con Three.js.
 
-**Funciones:** cambio de montura y color; Transitions GEN S (8 colores), XTRActive New Generation (3 colores y 5 espejados), XTRActive Polarized, Drivewear y Color Touch (degradado o uniforme), cada uno en interior, en el carro y al sol; antirreflejo; filtro de luz azul; foto con la montura puesta y carga de modelos propios en formato `.glb` (modo ajuste).
+**Funciones:** cambio de montura y color; Transitions GEN S (8 colores), XTRActive New Generation (3 colores y 5 espejados), XTRActive Polarized, Drivewear y Color Touch (degradado o uniforme), cada uno en interior, en el carro y al sol; antirreflejo; filtro de luz azul; foto con cuenta regresiva y carga de modelos propios en formato `.glb` (modo ajuste).
 
 ## Interfaz
 
-- **Entrada:** solo los lentes flotando en un estudio claro y el botón «Probármelos». Las monturas van pasando solas cada 7 s; se puede deslizar para cambiarlas o arrastrar para girarlas.
-- **Probador:** la cámara ocupa toda la pantalla y los controles son de vidrio líquido (en navegadores Chromium, como el del TV, el borde refracta lo que hay detrás). Pestañas: Monturas, Color, Transitions y Lentes.
-- **Dial con la mano:** juntar pulgar e índice toma la perilla, girar la mano cambia el valor y la mano abierta un segundo cambia lo que controla (oscuridad del lente, color de la montura, montura o color del lente). Usa MediaPipe Hand Landmarker.
+- **Entrada:** solo los lentes flotando en un estudio claro, el botón «Probármelos» y los créditos de los modelos abajo en letra pequeña. Las monturas van pasando solas cada 7 s; se puede deslizar para cambiarlas o arrastrar para girarlas.
+- **Probador:** la cámara ocupa toda la pantalla. Abajo hay una barra tipo app de cámara (Monturas · Color · obturador · Transitions · Lentes). Cada pestaña abre un panel compacto encima de la barra que se esconde solo al tocar la cámara o tras 10 s sin usarlo. El nombre de la montura aparece unos segundos cuando cambia.
+- **Foto:** el obturador (o hacer ✌️ con la mano medio segundo) arranca una cuenta regresiva 3-2-1 con toda la interfaz escondida; luego se ve la foto con Cerrar, Repetir y Guardar (se cierra sola a los 20 s).
+- **Dial con la mano:** juntar pulgar e índice toma la perilla, girar la mano cambia el valor y la mano abierta un segundo cambia lo que controla (oscuridad del lente, color de la montura, montura o color del lente). La mano se analiza en cada cuadro de la cámara y el cursor y el dial se animan a 60 fps; el color cambia al instante y la montura se cambia cuando el dial se queda quieto o al soltar. Tocar «Gestos» muestra cómo se usa.
 - Si nadie usa el probador por 75 s, vuelve solo a la entrada.
 
 ## Cómo funciona el 3D

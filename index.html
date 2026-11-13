@@ -1124,10 +1124,23 @@ function prepareModel(root, def){
   // Lentes: se reemplazan por lentes curvos generados desde el contorno de los del modelo (uno por lado)
   const inv = holder.matrixWorld.clone().invert();
   const v = new THREE.Vector3();
-  const sidePts = { 1: [], '-1': [] };
+  const sidePts = { 1: [], '-1': [] }, sideEdge = { 1: [], '-1': [] };
+  const va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3();
   for (const m of lens){
     const pos = m.geometry.attributes.position;
     for (let i = 0; i < pos.count; i++){ v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld); sidePts[v.x >= 0 ? 1 : -1].push(v.x, v.y, v.z); }
+    // puntos a lo largo de cada arista: el contorno sale de los bordes reales, aunque los triángulos sean grandes
+    const ix = m.geometry.index ? m.geometry.index.array : Array.from({ length: pos.count }, (_, i) => i);
+    for (let t = 0; t < ix.length; t += 3){
+      va.fromBufferAttribute(pos, ix[t]).applyMatrix4(m.matrixWorld);
+      vb.fromBufferAttribute(pos, ix[t + 1]).applyMatrix4(m.matrixWorld);
+      vc.fromBufferAttribute(pos, ix[t + 2]).applyMatrix4(m.matrixWorld);
+      const sd = sideEdge[(va.x + vb.x + vc.x) >= 0 ? 1 : -1];
+      for (const [p, q] of [[va, vb], [vb, vc], [vc, va]]){
+        const steps = Math.min(24, Math.max(1, Math.ceil(p.distanceTo(q) / 0.006)));
+        for (let k = 0; k <= steps; k++){ const f = k / steps; sd.push(p.x + (q.x - p.x) * f, p.y + (q.y - p.y) * f); }
+      }
+    }
   }
   for (const m of lens) m.removeFromParent();
   const newLens = [];
@@ -1136,13 +1149,16 @@ function prepareModel(root, def){
     const N = P3.length / 3;
     let cx = 0, cy = 0; for (let i = 0; i < P3.length; i += 3){ cx += P3[i] / N; cy += P3[i + 1] / N; }
     // contorno: el punto más lejano del centro en cada dirección
-    const BINS = 120, rad = new Float32Array(BINS);
-    for (let i = 0; i < P3.length; i += 3){
-      const dx = P3[i] - cx, dy = P3[i + 1] - cy, ang = Math.atan2(dy, dx);
+    const BINS = 120, rad = new Float32Array(BINS), E = sideEdge[side];
+    for (let i = 0; i < E.length; i += 2){
+      const dx = E[i] - cx, dy = E[i + 1] - cy, ang = Math.atan2(dy, dx);
       const bIdx = Math.floor(((ang + Math.PI) / (2 * Math.PI)) * BINS) % BINS;
       rad[bIdx] = Math.max(rad[bIdx], Math.hypot(dx, dy));
     }
     for (let k = 0; k < BINS; k++) if (!rad[k]){ let l = k, r = k; while (!rad[(l + BINS - 1) % BINS] && l > k - BINS) l--; while (!rad[(r + 1) % BINS] && r < k + BINS) r++; rad[k] = (rad[(l + BINS - 1) % BINS] + rad[(r + 1) % BINS]) / 2; }
+    // quitar picos sueltos (mediana de 5) y suavizar un poco
+    const med = Float32Array.from(rad, (_, k) => [-2, -1, 0, 1, 2].map(o => rad[(k + o + BINS) % BINS]).sort((a, b) => a - b)[2]);
+    for (let k = 0; k < BINS; k++) rad[k] = (med[(k + BINS - 1) % BINS] + 2 * med[k] + med[(k + 1) % BINS]) / 4;
     const outline = [];
     for (let k = 0; k < BINS; k++){ const ang = -Math.PI + (k + 0.5) / BINS * 2 * Math.PI; outline.push([cx + rad[k] * Math.cos(ang), cy + rad[k] * Math.sin(ang)]); }
     // plano medio de los lentes del modelo (respeta la curvatura frontal de la montura)

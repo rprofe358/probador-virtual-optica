@@ -6,7 +6,7 @@ Prototipo de probador de monturas con realidad aumentada para una óptica. Corre
 
 ## Interfaz
 
-- **Entrada:** los lentes flotan en un estudio claro; se desliza (o se usan las flechas) para cambiar de montura y se arrastra para girarla. Desde aquí se abre el probador, se va directo a Transitions o se ve el tutorial de gestos.
+- **Entrada:** solo los lentes flotando en un estudio claro y el botón «Probármelos». Las monturas van pasando solas cada 7 s; se puede deslizar para cambiarlas o arrastrar para girarlas.
 - **Probador:** la cámara ocupa toda la pantalla y los controles son de vidrio líquido (en navegadores Chromium, como el del TV, el borde refracta lo que hay detrás). Pestañas: Monturas, Color, Transitions y Lentes.
 - **Dial con la mano:** juntar pulgar e índice toma la perilla, girar la mano cambia el valor y la mano abierta un segundo cambia lo que controla (oscuridad del lente, color de la montura, montura o color del lente). Usa MediaPipe Hand Landmarker.
 - Si nadie usa el probador por 75 s, vuelve solo a la entrada.

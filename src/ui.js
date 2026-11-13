@@ -218,11 +218,9 @@ function fitIntro(){
   introR.setSize(w, h, false);
   introCam.aspect = w / h;
   const portrait = h >= w;
-  // vertical: los lentes entre el encabezado y el panel de abajo; horizontal: a la izquierda del panel
-  const panelTop = $('introPanel').getBoundingClientRect().top || h * 0.6;
-  const fx = portrait ? 0.5 : 0.33;
-  const fy = portrait ? Math.min(0.42, ((70 + panelTop) / 2) / h) : 0.47;
-  const share = portrait ? (w < 500 ? 0.78 : 0.68) : 0.4;    // fracción del ancho que ocupa la montura
+  // los lentes al centro, un poco arriba; el botón debajo
+  const fx = 0.5, fy = portrait ? 0.43 : 0.42;
+  const share = portrait ? (w < 500 ? 0.84 : 0.74) : 0.44;   // fracción del ancho que ocupa la montura
   const visW = 1.2 / share;                                   // la montura mide ~1.2 unidades con bisagras
   const t = Math.tan(THREE.MathUtils.degToRad(introCam.fov / 2));
   const dist = visW / (2 * t * introCam.aspect);
@@ -232,7 +230,7 @@ function fitIntro(){
   introEl.style.setProperty('--glasses-y', (fy * 100) + '%');
   introEl.style.setProperty('--glasses-x', (fx * 100) + '%');
   introEl.style.setProperty('--shadow-off', (portrait ? 0.11 * w : 0.12 * h) + 'px');
-  introEl.style.setProperty('--num-top', portrait ? Math.max(8, fy * 100 - 22) + '%' : '12%');
+  introEl.style.setProperty('--cta-y', (portrait ? 68 : 74) + '%');
 }
 new ResizeObserver(fitIntro).observe(introCanvas);
 
@@ -260,11 +258,7 @@ async function buildIntroObj(def){
 async function showIntroFrame(i, dir = 1){
   introIdx = (i + FRAMES.length) % FRAMES.length;
   const def = FRAMES[introIdx];
-  $('introName').textContent = def.nombre + '.';
-  $('introMeta').textContent = `${def.estilo} · ${def.medidas}`;
-  $('introDesc').textContent = def.desc || '';
-  $('introNum').textContent = String(introIdx + 1).padStart(2, '0');
-  [...$('introIndex').children].forEach((b, k) => b.setAttribute('aria-current', String(k === introIdx)));
+  introLastSwap = performance.now();
   const token = ++introLoad;
   let obj;
   try { obj = await buildIntroObj(def); } catch (e){ console.error(e); return; }
@@ -274,7 +268,7 @@ async function showIntroFrame(i, dir = 1){
   introPivot.add(obj);
 }
 function buildIntroIndex(){
-  const box = $('introIndex'); box.innerHTML = '';
+  const box = $('introIndex'); if (!box) return; box.innerHTML = '';
   FRAMES.forEach((def, i) => {
     const b = document.createElement('button'); b.type = 'button';
     b.setAttribute('aria-label', def.nombre); b.setAttribute('aria-current', String(i === introIdx));
@@ -282,12 +276,17 @@ function buildIntroIndex(){
     box.append(b);
   });
 }
-$('introPrev').addEventListener('click', () => showIntroFrame(introIdx - 1, -1));
-$('introNext').addEventListener('click', () => showIntroFrame(introIdx + 1, 1));
+// en la entrada las monturas van pasando solas; tocar, arrastrar o deslizar las detiene un rato
+let introLastSwap = performance.now(), introTouched = 0;
+const INTRO_AUTO_MS = 7000;
+setInterval(() => {
+  const now = performance.now();
+  if (screen === 'intro' && !drag && now - introLastSwap > INTRO_AUTO_MS && now - introTouched > 12000) showIntroFrame(introIdx + 1, 1);
+}, 500);
 
 // arrastrar para girar, deslizar rápido para cambiar
 let drag = null;
-introCanvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, x0: e.clientX, t: performance.now() }; introCanvas.setPointerCapture(e.pointerId); });
+introCanvas.addEventListener('pointerdown', e => { introTouched = performance.now(); drag = { x: e.clientX, x0: e.clientX, t: performance.now() }; introCanvas.setPointerCapture(e.pointerId); });
 introCanvas.addEventListener('pointermove', e => { if (!drag) return; const dx = e.clientX - drag.x; drag.x = e.clientX; introDragV = dx * 0.012; introDrag += introDragV; });
 introCanvas.addEventListener('pointerup', e => {
   if (!drag) return;
@@ -303,18 +302,18 @@ function introLoop(now){
   requestAnimationFrame(introLoop);
   const t = (now - introT0) / 1000, dt = Math.min(0.05, (now - introPrevT) / 1000); introPrevT = now;
   if (!drag){ introDragV *= 0.92; introDrag += introDragV; introDrag *= 0.985; }
-  introSwapT = Math.min(1, introSwapT + dt / 0.75);
+  introSwapT = Math.min(1, introSwapT + dt / 0.9);
   const s = ease(introSwapT);
   const floatY = Math.sin(t * 0.9) * 0.018;
   if (introObj){
-    introObj.position.set((1 - s) * 0.9 * introDir, floatY, 0);
+    introObj.position.set((1 - s) * 1.5 * introDir, floatY, 0);
     introObj.rotation.set(0.1 + Math.sin(t * 0.6) * 0.04, Math.sin(t * 0.32) * 0.42 + introDrag + (1 - s) * -1.2 * introDir, Math.sin(t * 0.5) * 0.02);
     introObj.scale.setScalar(0.85 + 0.15 * s);
   }
   if (introOld){
-    introOld.position.set(-s * 0.9 * introDir, floatY, 0);
+    introOld.position.set(-Math.min(1, s * 1.6) * 1.8 * introDir, floatY, 0);
     introOld.rotation.y += dt * 1.6 * introDir;
-    introOld.scale.setScalar(Math.max(0.001, 1 - 0.6 * s));
+    introOld.scale.setScalar(Math.max(0.001, 1 - 0.7 * s));
     if (s >= 1){ introPivot.remove(introOld); disposeIntroObj(introOld); introOld = null; }
   }
   $('introShadow').style.opacity = String(0.7 + floatY * 8);
@@ -367,6 +366,8 @@ async function goApp(tab = 'monturas'){
     openTab(tab, false);
     fitCamera();
     lastActivity = performance.now();
+    // la primera vez, recordar que existe el dial con la mano
+    if (!goApp.tipShown){ goApp.tipShown = true; setTimeout(() => { if (screen === 'app' && G.on) toast('Junta el pulgar y el índice y gira la mano para usar el dial', 6000); }, 2500); }
   } finally { starting = false; }
 }
 function goHome(){
@@ -381,12 +382,6 @@ function goHome(){
   fitIntro(); startIntroLoop();
 }
 $('btnTry').addEventListener('click', () => goApp('monturas'));
-$('btnTransitions').addEventListener('click', () => {
-  if (state.trType === 'claro'){ state.trType = 'gens'; state.trColor = 0; }
-  state.tintTarget = 1; buildTintUI(); updateLens();
-  goApp('transitions');
-});
-$('btnGestures').addEventListener('click', () => { $('gestureHelp').hidden = false; });
 $('btnHelpClose').addEventListener('click', () => { $('gestureHelp').hidden = true; });
 $('btnHome').addEventListener('click', goHome);
 
@@ -576,8 +571,8 @@ function dialRefresh(delta = 0){
 /* ---------- Teclado (para la demo en laptop) ---------- */
 window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
-  if (e.key === 'ArrowRight'){ screen === 'intro' ? showIntroFrame(introIdx + 1, 1) : setFrame(state.frame + 1); }
-  else if (e.key === 'ArrowLeft'){ screen === 'intro' ? showIntroFrame(introIdx - 1, -1) : setFrame(state.frame - 1); }
+  if (e.key === 'ArrowRight'){ introTouched = performance.now(); screen === 'intro' ? showIntroFrame(introIdx + 1, 1) : setFrame(state.frame + 1); }
+  else if (e.key === 'ArrowLeft'){ introTouched = performance.now(); screen === 'intro' ? showIntroFrame(introIdx - 1, -1) : setFrame(state.frame - 1); }
   else if (e.key === 'Enter' && screen === 'intro') goApp();
   else if (e.key === 'Escape') goHome();
   else if (e.key === 'd' || e.key === 'D') setAdmin(!state.debug);

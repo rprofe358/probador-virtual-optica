@@ -2,7 +2,7 @@
 import base64, json, pathlib, sys
 base = pathlib.Path(__file__).resolve().parent.parent
 html = (base / 'index.html').read_text(encoding='utf-8')
-modelos = {f'{d}/{p.name}': base64.b64encode(p.read_bytes()).decode() for d in ('monturas', 'recursos') for p in sorted((base / d).glob('*.glb'))}
+modelos = {f'{d}/{p.name}': base64.b64encode(p.read_bytes()).decode() for d in ('monturas', 'recursos') for p in sorted(list((base / d).glob('*.glb')) + list((base / d).glob('*.hdr')))}
 tag = '<script>window.MODELOS_EMBEBIDOS = ' + json.dumps(modelos) + ';</script>'
 out = base / 'dist' / 'probador-virtual.html'
 out.parent.mkdir(exist_ok=True)

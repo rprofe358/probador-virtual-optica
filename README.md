@@ -4,6 +4,13 @@ Prototipo de probador de monturas con realidad aumentada para una óptica. Corre
 
 **Funciones:** cambio de montura y color; Transitions GEN S (8 colores), XTRActive New Generation (3 colores y 5 espejados), XTRActive Polarized, Drivewear y Color Touch (degradado o uniforme), cada uno en interior, en el carro y al sol; antirreflejo; filtro de luz azul; foto con la montura puesta y carga de modelos propios en formato `.glb` (modo ajuste).
 
+## Interfaz
+
+- **Entrada:** los lentes flotan en un estudio claro; se desliza (o se usan las flechas) para cambiar de montura y se arrastra para girarla. Desde aquí se abre el probador, se va directo a Transitions o se ve el tutorial de gestos.
+- **Probador:** la cámara ocupa toda la pantalla y los controles son de vidrio líquido (en navegadores Chromium, como el del TV, el borde refracta lo que hay detrás). Pestañas: Monturas, Color, Transitions y Lentes.
+- **Dial con la mano:** juntar pulgar e índice toma la perilla, girar la mano cambia el valor y la mano abierta un segundo cambia lo que controla (oscuridad del lente, color de la montura, montura o color del lente). Usa MediaPipe Hand Landmarker.
+- Si nadie usa el probador por 75 s, vuelve solo a la entrada.
+
 ## Cómo funciona el 3D
 
 - **Pose de la cabeza:** se ajusta la cara canónica de MediaPipe (468 puntos, en cm) a 33 puntos estables de la cara detectada (frente, nariz, comisuras de los ojos, pómulos y sienes). Así se obtienen el giro real de la cabeza y el tamaño real de la cara, y cada montura se dibuja con su ancho real en mm.
@@ -29,7 +36,7 @@ Se activa con la tecla **D** o con **5 toques seguidos** sobre el nombre de la �
 
 ## Estructura
 
-- `index.html`: la app completa.
+- `index.html`: la app completa (se genera con `herramientas/ensamblar.py` a partir de `src/shell.html`, la interfaz, y `src/ui.js`, su lógica).
 - `recursos/cabeza-oclusor.glb`: cabeza invisible para la oclusión, ya alineada a la cara canónica de MediaPipe.
 - `herramientas/preparar-cabeza.mjs`: alinea otro modelo de cabeza con la cara canónica.
 - `monturas/`: modelos 3D de las monturas (`.glb`, Y arriba, frente hacia +Z, lentes en un objeto llamado `lente`).

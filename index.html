@@ -6,142 +6,208 @@
 <title>Probador Virtual Óptica</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@200;300;500;600;700&display=swap">
 <style>
-/* Layout: cámara a pantalla completa + panel de control (abajo en vertical, a la derecha en horizontal). Look oscuro único, tipo kiosco. */
+/* Dos mundos: el estudio claro de la entrada (lentes flotando, tipografía fina, un acento rojo)
+   y el probador a pantalla completa con controles de vidrio líquido sobre la cámara. */
 :root{
-  --ink:#0e1113;
-  --panel:#15191c;
-  --raise:#1d2226;
-  --line:#2a3136;
-  --text:#eef1f2;
-  --muted:#97a1a7;
-  --carey:#d6a15a;
-  --carey-ink:#1c1308;
-  --font-display:'Sora', 'Segoe UI', system-ui, sans-serif;
-  --font-body:'Manrope', 'Segoe UI', system-ui, sans-serif;
-  color-scheme:dark;
+  --studio:#eceef1;
+  --studio-2:#dfe3e8;
+  --ink:#14161a;
+  --ink-soft:#5d636c;
+  --ghost:#d3d8de;
+  --accent:#e5484d;
+  --iri-1:#7aa2ff; --iri-2:#b38cff; --iri-3:#62e0d8; --iri-4:#ff9fcf;
+  --glass-text:#ffffff;
+  --glass-soft:rgba(255,255,255,.72);
+  --font-display:'Sora','Segoe UI',system-ui,sans-serif;
+  --font-body:'Manrope','Segoe UI',system-ui,sans-serif;
+  --r-pill:999px; --r-card:26px;
+  color-scheme:light;
 }
 *{box-sizing:border-box}
-html,body{height:100%;margin:0}
-body{background:var(--ink);color:var(--text);font-family:var(--font-body);font-size:15px;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+html,body{height:100%;margin:0;overflow:hidden}
+body{background:var(--studio);color:var(--ink);font-family:var(--font-body);-webkit-tap-highlight-color:transparent;overscroll-behavior:none;touch-action:manipulation}
 [hidden]{display:none!important}
-button{font:inherit;color:inherit;cursor:pointer}
-button:focus-visible,input:focus-visible{outline:2px solid var(--carey);outline-offset:2px}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0}
+button:focus-visible,input:focus-visible,label:focus-visible{outline:2px solid var(--iri-1);outline-offset:3px}
+.screen{position:fixed;inset:0;transition:opacity .6s ease, transform .7s cubic-bezier(.2,.8,.2,1)}
+.screen.leaving{opacity:0;transform:scale(1.04);pointer-events:none}
+.screen.entering{opacity:0}
 
-#app{height:100dvh;display:grid;grid-template-rows:minmax(0,1fr) auto}
-@media (orientation:landscape) and (min-width:900px){
-  #app{grid-template-columns:minmax(0,1fr) 390px;grid-template-rows:minmax(0,1fr)}
+/* ============== VIDRIO LÍQUIDO ============== */
+.glass{
+  position:relative;isolation:isolate;color:var(--glass-text);
+  background:linear-gradient(140deg,rgba(255,255,255,.30),rgba(255,255,255,.08) 48%,rgba(255,255,255,.16));
+  -webkit-backdrop-filter:blur(22px) saturate(175%);backdrop-filter:blur(22px) saturate(175%);
+  border:1px solid rgba(255,255,255,.34);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.75),inset 0 -1px 1px rgba(255,255,255,.18),inset 0 0 24px rgba(255,255,255,.07),0 18px 46px rgba(8,14,30,.28);
+  text-shadow:0 1px 8px rgba(0,0,0,.25);
 }
+.refract .glass.lg{-webkit-backdrop-filter:blur(16px) saturate(175%);backdrop-filter:url(#liquid) blur(16px) saturate(175%)}
+.glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
+  background:radial-gradient(110% 70% at 18% -10%,rgba(255,255,255,.55),transparent 52%),radial-gradient(80% 60% at 100% 120%,rgba(255,255,255,.18),transparent 60%)}
+.glass::after{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1.2px;pointer-events:none;opacity:.75;
+  background:conic-gradient(from 200deg,rgba(255,255,255,.85),rgba(150,185,255,.55),rgba(255,170,215,.5),rgba(140,255,230,.5),rgba(255,255,255,.85));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
+.glass.light{color:var(--ink);text-shadow:none;background:linear-gradient(140deg,rgba(255,255,255,.62),rgba(255,255,255,.3));border-color:rgba(255,255,255,.8);box-shadow:inset 0 1px 0 #fff,0 14px 38px rgba(40,50,70,.14)}
+.pill{border-radius:var(--r-pill)}
 
-/* ---------- Escenario ---------- */
-.stage{position:relative;overflow:hidden;background:#000;min-height:0}
+/* ============== ENTRADA (ESTUDIO) ============== */
+.intro{background:radial-gradient(120% 70% at 50% 42%,#fafbfc 0%,var(--studio) 45%,var(--studio-2) 100%);overflow:hidden}
+.blobs{position:absolute;inset:-10%;pointer-events:none;filter:blur(70px) saturate(140%);opacity:.7}
+.blobs i{position:absolute;border-radius:50%;mix-blend-mode:multiply;animation:drift 18s ease-in-out infinite alternate}
+.blobs i:nth-child(1){width:46vmax;height:46vmax;left:-12%;top:52%;background:radial-gradient(circle,var(--iri-1),transparent 65%)}
+.blobs i:nth-child(2){width:38vmax;height:38vmax;right:-14%;top:8%;background:radial-gradient(circle,var(--iri-2),transparent 65%);animation-duration:22s}
+.blobs i:nth-child(3){width:30vmax;height:30vmax;right:6%;bottom:-6%;background:radial-gradient(circle,var(--iri-3),transparent 65%);animation-duration:26s}
+.blobs i:nth-child(4){width:24vmax;height:24vmax;left:24%;top:-6%;background:radial-gradient(circle,var(--iri-4),transparent 65%);animation-duration:20s}
+@keyframes drift{to{transform:translate(6%,-5%) scale(1.12)}}
+#introGl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.intro-shadow{position:absolute;left:var(--glasses-x,50%);top:calc(var(--glasses-y,44%) + var(--shadow-off,15vmin));width:52vmin;height:5vmin;transform:translateX(-50%);
+  border-radius:50%;background:radial-gradient(closest-side,rgba(30,36,48,.22),transparent);filter:blur(6px);pointer-events:none;transition:opacity .4s}
+.intro-num{position:absolute;left:max(4vw,env(safe-area-inset-left,0px));top:var(--num-top,20%);font-family:var(--font-display);font-weight:200;
+  font-size:clamp(120px,28vmin,360px);line-height:.8;letter-spacing:-.04em;color:var(--ghost);pointer-events:none;user-select:none;font-variant-numeric:tabular-nums}
+.intro-top{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:calc(22px + env(safe-area-inset-top,0px)) max(28px,env(safe-area-inset-right,0px)) 0 max(28px,env(safe-area-inset-left,0px));font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft)}
+.brand{display:flex;align-items:center;gap:10px;color:var(--ink);font-weight:700;letter-spacing:.18em;user-select:none;-webkit-user-select:none;cursor:default}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(229,72,77,.15)}
+.intro-nav{display:flex;gap:22px}
+.intro-nav span[aria-current]{color:var(--ink)}
+.intro-index{position:absolute;left:max(22px,env(safe-area-inset-left,0px));top:var(--glasses-y,44%);transform:translateY(-50%);display:flex;flex-direction:column;gap:12px}
+.intro-index button{width:10px;height:10px;border-radius:3px;border:1.5px solid #b9bfc7;transition:all .3s}
+.intro-index button[aria-current="true"]{background:var(--accent);border-color:var(--accent);height:26px}
+.intro-panel{position:absolute;left:0;right:0;bottom:calc(3.5vh + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;align-items:center;gap:clamp(20px,3.4vh,40px);padding-inline:max(24px,env(safe-area-inset-left,0px))}
+.intro-info{width:min(600px,100%);display:flex;flex-direction:column;gap:10px}
+@media (orientation:landscape){
+  .intro-panel{left:auto;right:max(5vw,env(safe-area-inset-right,0px));bottom:auto;top:50%;transform:translateY(-46%);width:min(470px,40vw);align-items:flex-start;padding-inline:0}
+  .intro-panel .intro-actions{align-items:flex-start}
+  .intro-panel .intro-secondary{justify-content:flex-start}
+}
+@media (max-width:640px){ .intro-nav{display:none} }
+.intro-info h1{margin:0;font-family:var(--font-display);font-weight:700;font-size:clamp(34px,6.4vmin,74px);letter-spacing:-.03em;line-height:1;text-wrap:balance}
+.intro-info .rule{width:44px;height:3px;background:var(--accent);border-radius:2px}
+.intro-info .meta{margin:0;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+.intro-info .desc{margin:0;font-size:clamp(14px,1.9vmin,18px);line-height:1.55;color:var(--ink-soft);max-width:38ch}
+.intro-actions{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%}
+.cta{display:inline-flex;align-items:center;gap:14px;background:var(--ink);color:#fff;border-radius:var(--r-pill);padding:22px 40px;font-family:var(--font-display);font-weight:600;font-size:clamp(17px,2.4vmin,26px);
+  box-shadow:0 18px 40px rgba(20,22,26,.28),inset 0 1px 0 rgba(255,255,255,.18);transition:transform .2s}
+.cta:active{transform:scale(.97)}
+.cta svg{width:1.2em;height:1.2em}
+.cta:disabled{opacity:.7;cursor:progress}
+.intro-secondary{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.intro-secondary .glass{padding:14px 22px;font-weight:600;font-size:clamp(14px,1.8vmin,18px)}
+.intro-browse{display:flex;align-items:center;gap:14px}
+.intro-browse button{width:48px;height:48px;display:grid;place-items:center}
+.intro-browse svg{width:20px;height:20px}
+.intro-hint{margin:0;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+.status{min-height:1.3em;margin:0;font-size:14px;color:var(--ink-soft);text-align:center}
+.status.err{color:#b4262b;max-width:52ch;line-height:1.5}
+.credits{margin:0;font-size:9.5px;color:#9aa1aa;max-width:70ch;text-align:center;line-height:1.4}
+@media (orientation:landscape){ .credits{text-align:left} }
+
+/* ============== PROBADOR ============== */
+.app{background:#05070a;color:#fff}
+.stage{position:absolute;inset:0;overflow:hidden;background:#000}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;transform:scaleX(-1)}
-.topbar{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:calc(14px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 14px max(16px,env(safe-area-inset-left,0px));
-  background:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,0));pointer-events:none}
-.brand{display:flex;flex-direction:column;gap:2px;pointer-events:auto;user-select:none;-webkit-user-select:none}
-.brand b{font-family:var(--font-display);font-size:17px;letter-spacing:.02em}
-.brand span{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--carey)}
-.top-actions{display:flex;gap:8px;pointer-events:auto}
-.icon-btn{border:1px solid rgba(255,255,255,.18);background:rgba(14,17,19,.55);backdrop-filter:blur(8px);border-radius:999px;padding:9px 14px;font-size:13px;font-weight:600}
-.hint{position:absolute;left:50%;top:22%;transform:translateX(-50%);background:rgba(14,17,19,.72);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.14);
-  padding:10px 18px;border-radius:999px;font-weight:600;font-size:14px;white-space:nowrap}
-.shutter{position:absolute;right:max(18px,env(safe-area-inset-right,0px));bottom:18px;width:68px;height:68px;border-radius:50%;
-  border:3px solid #fff;background:rgba(255,255,255,.18);display:grid;place-items:center}
-.shutter::after{content:"";width:50px;height:50px;border-radius:50%;background:#fff;transition:transform .15s}
-.shutter:active::after{transform:scale(.88)}
-.shutter span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-.now{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:20px;background:rgba(14,17,19,.68);backdrop-filter:blur(8px);
-  border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:10px 14px;display:flex;flex-direction:column;gap:2px;max-width:60%}
-.now b{font-family:var(--font-display);font-size:16px}
-.now span{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
-.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .35s}
-.flash.on{opacity:.85;transition:none}
-.debug{position:absolute;left:12px;top:70px;background:rgba(0,0,0,.7);font:12px/1.5 ui-monospace,Consolas,monospace;padding:8px 10px;border-radius:8px;white-space:pre}
-
-/* ---------- Panel ---------- */
-.panel{background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column;gap:18px;overflow-y:auto;max-height:48dvh;
-  padding-block:16px calc(16px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-@media (orientation:landscape) and (min-width:900px){
-  .panel{border-top:0;border-left:1px solid var(--line);max-height:none;padding-top:22px}
+.app-top{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:5;
+  padding:calc(18px + env(safe-area-inset-top,0px)) max(18px,env(safe-area-inset-right,0px)) 0 max(18px,env(safe-area-inset-left,0px))}
+.app-top .glass{padding:12px 18px;display:inline-flex;align-items:center;gap:10px;font-weight:600;font-size:clamp(13px,1.7vmin,17px)}
+.app-top svg{width:18px;height:18px}
+.now{flex-direction:column;align-items:flex-start!important;gap:2px!important;max-width:46vw;min-width:0}
+.now b{font-family:var(--font-display);font-weight:600;font-size:clamp(14px,1.9vmin,19px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.now span{font-size:clamp(11px,1.3vmin,13px);color:var(--glass-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.dial-pill[aria-pressed="false"]{opacity:.7}
+@media (max-width:600px){
+  .now span,.dial-pre{display:none}
+  .app-top .glass{padding:11px 14px}
+  .now{max-width:38vw}
 }
-.sec{display:flex;flex-direction:column;gap:10px}
-.sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
-.label{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-.value{font-size:13px;color:var(--text);font-variant-numeric:tabular-nums}
-
-.frames{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x proximity}
-@media (orientation:landscape) and (min-width:900px){ .frames{display:grid;grid-template-columns:1fr 1fr;overflow:visible} }
-.frame-card{flex:0 0 140px;scroll-snap-align:start;border:1.5px solid var(--line);background:var(--raise);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:6px;text-align:left}
-.frame-card canvas{width:100%;height:52px;display:block}
-.frame-card b{font-family:var(--font-display);font-size:14px;font-weight:600}
-.frame-card small{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
-.frame-card[aria-pressed="true"]{border-color:var(--carey);background:#241e17}
-
-.swatches{display:flex;gap:10px;flex-wrap:wrap}
-.swatch{width:40px;height:40px;border-radius:50%;border:2px solid var(--line);padding:0;position:relative}
-.swatch[aria-pressed="true"]{border-color:var(--carey);box-shadow:0 0 0 3px var(--panel) inset}
-.swatch-name{font-size:13px;color:var(--muted)}
-
-input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:30px;background:transparent}
-input[type=range]::-webkit-slider-runnable-track{height:10px;border-radius:99px;background:linear-gradient(90deg,#e9eef0,var(--tint-dark,#3a3d40));border:1px solid var(--line)}
-input[type=range]::-moz-range-track{height:10px;border-radius:99px;background:linear-gradient(90deg,#e9eef0,var(--tint-dark,#3a3d40));border:1px solid var(--line)}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--carey);border:3px solid var(--panel);margin-top:-9px}
-input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--carey);border:3px solid var(--panel)}
-.range-ends{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:-4px}
-.tr-desc{margin:0;font-size:12.5px;line-height:1.45;color:var(--muted)}
-.chip.small{padding:7px 11px;font-size:12.5px}
-
+.rail{position:absolute;right:max(16px,env(safe-area-inset-right,0px));top:50%;transform:translateY(-62%);display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:30px;z-index:5}
+.rail button{width:clamp(56px,7.4vmin,78px);height:clamp(56px,7.4vmin,78px);border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:clamp(10px,1.15vmin,12px);font-weight:600;color:#fff;transition:background .25s}
+.rail svg{width:24px;height:24px}
+.rail button[aria-selected="true"]{background:rgba(255,255,255,.92);color:var(--ink);text-shadow:none}
+.sheet{position:absolute;left:max(16px,env(safe-area-inset-left,0px));right:calc(max(16px,env(safe-area-inset-right,0px)) + clamp(72px,9vmin,96px) + 14px);bottom:calc(18px + env(safe-area-inset-bottom,0px));
+  border-radius:var(--r-card);padding:18px 20px 20px;z-index:5;max-height:42vh;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:14px;transition:transform .45s cubic-bezier(.2,.8,.2,1),opacity .3s}
+.sheet.closed{transform:translateY(calc(100% + 30px));opacity:0;pointer-events:none}
+@media (orientation:landscape){ .sheet{right:auto;width:min(620px,56vw)} }
+.sheet h2{margin:0;font-family:var(--font-display);font-weight:600;font-size:clamp(15px,2vmin,20px);display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.sheet h2 small{font-family:var(--font-body);font-weight:500;font-size:13px;color:var(--glass-soft);font-variant-numeric:tabular-nums}
+.tab{display:flex;flex-direction:column;gap:12px}
 .row{display:flex;gap:8px;flex-wrap:wrap}
-.chip{border:1.5px solid var(--line);background:var(--raise);border-radius:999px;padding:9px 14px;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:8px}
-.chip[aria-pressed="true"]{border-color:var(--carey);color:var(--carey)}
-.dot{width:12px;height:12px;border-radius:50%;display:inline-block}
-.sun{background:var(--carey);color:var(--carey-ink);border-color:var(--carey)}
-.sun[aria-pressed="true"]{background:var(--raise);color:var(--carey)}
+.chip{display:inline-flex;align-items:center;gap:8px;border-radius:var(--r-pill);padding:11px 16px;font-weight:600;font-size:clamp(13px,1.6vmin,16px);
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.26);color:#fff;transition:background .2s,color .2s}
+.chip.small{padding:10px 14px}
+.chip[aria-pressed="true"]{background:rgba(255,255,255,.94);color:var(--ink);text-shadow:none;border-color:#fff}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4)}
+.tr-desc{margin:0;font-size:clamp(12.5px,1.5vmin,15px);line-height:1.5;color:var(--glass-soft)}
+.frames{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x proximity;scrollbar-width:none}
+.frames::-webkit-scrollbar{display:none}
+.frame-card{flex:0 0 clamp(150px,20vmin,210px);scroll-snap-align:start;border-radius:20px;padding:12px;display:flex;flex-direction:column;gap:6px;text-align:left;
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24);color:#fff;transition:background .2s}
+.frame-card img,.frame-card canvas{width:100%;height:clamp(54px,7vmin,76px);object-fit:contain;display:block;filter:drop-shadow(0 6px 10px rgba(0,0,0,.25))}
+.frame-card .ph{height:clamp(54px,7vmin,76px);display:grid;place-items:center;font-size:11px;color:var(--glass-soft)}
+.frame-card b{font-family:var(--font-display);font-weight:600;font-size:clamp(13px,1.6vmin,16px)}
+.frame-card small{font-size:12px;color:var(--glass-soft);font-variant-numeric:tabular-nums}
+.frame-card[aria-pressed="true"]{background:rgba(255,255,255,.9);color:var(--ink);text-shadow:none}
+.frame-card[aria-pressed="true"] small{color:var(--ink-soft)}
+.swatches{display:flex;gap:14px;flex-wrap:wrap}
+.swatch{width:clamp(48px,6.4vmin,64px);height:clamp(48px,6.4vmin,64px);border-radius:50%;border:2px solid rgba(255,255,255,.5);box-shadow:0 6px 16px rgba(0,0,0,.25)}
+.swatch[aria-pressed="true"]{outline:3px solid #fff;outline-offset:4px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:40px;background:transparent}
+input[type=range]::-webkit-slider-runnable-track{height:12px;border-radius:99px;background:linear-gradient(90deg,rgba(255,255,255,.95),rgba(40,44,52,.9));border:1px solid rgba(255,255,255,.4)}
+input[type=range]::-moz-range-track{height:12px;border-radius:99px;background:linear-gradient(90deg,rgba(255,255,255,.95),rgba(40,44,52,.9))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:34px;height:34px;border-radius:50%;background:#fff;margin-top:-12px;box-shadow:0 4px 14px rgba(0,0,0,.35),inset 0 0 0 6px rgba(122,162,255,.35)}
+input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;background:#fff;border:0}
+.range-ends{display:flex;justify-content:space-between;font-size:12px;color:var(--glass-soft);margin-top:-8px}
+.toggles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:520px){ .toggles{grid-template-columns:1fr} }
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:14px;border-radius:20px;padding:14px 16px;text-align:left;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24)}
+.toggle div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.toggle b{font-size:clamp(14px,1.7vmin,17px)}
+.toggle small{font-size:12.5px;color:var(--glass-soft)}
+.switch{flex:0 0 48px;height:28px;border-radius:99px;background:rgba(255,255,255,.25);position:relative;transition:background .2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.toggle[aria-pressed="true"] .switch{background:linear-gradient(90deg,var(--iri-1),var(--iri-2))}
+.toggle[aria-pressed="true"] .switch::after{transform:translateX(20px)}
+.upload{align-self:flex-start;border-style:dashed!important;cursor:pointer}
+.shutter{position:absolute;right:max(18px,env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));width:clamp(72px,9vmin,96px);height:clamp(72px,9vmin,96px);border-radius:50%;z-index:6;display:grid;place-items:center}
+.shutter span{width:62%;height:62%;border-radius:50%;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.25);transition:transform .15s}
+.shutter:active span{transform:scale(.86)}
+.hint{position:absolute;left:50%;top:22%;transform:translateX(-50%);padding:14px 24px;font-weight:600;font-size:clamp(14px,1.9vmin,19px);white-space:nowrap;z-index:4}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .35s;z-index:8}
+.flash.on{opacity:.85;transition:none}
+.debug{position:absolute;left:16px;top:calc(90px + env(safe-area-inset-top,0px));background:rgba(0,0,0,.72);color:#fff;font:12px/1.5 ui-monospace,Consolas,monospace;padding:10px 12px;border-radius:10px;white-space:pre;z-index:9}
 
-.toggle{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1.5px solid var(--line);background:var(--raise);border-radius:14px;padding:12px 14px;text-align:left;width:100%}
-.toggle div{display:flex;flex-direction:column;gap:2px;min-width:0}
-.toggle b{font-size:14px}
-.toggle small{font-size:12px;color:var(--muted)}
-.switch{flex:0 0 42px;height:24px;border-radius:99px;background:var(--line);position:relative;transition:background .2s}
-.switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s}
-.toggle[aria-pressed="true"] .switch{background:var(--carey)}
-.toggle[aria-pressed="true"] .switch::after{transform:translateX(18px)}
-.toggles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-@media (max-width:420px){ .toggles{grid-template-columns:1fr} }
+/* Dial de gestos */
+.dial{position:absolute;width:clamp(220px,30vmin,320px);height:clamp(220px,30vmin,320px);border-radius:50%;transform:translate(-50%,-50%) scale(.85);opacity:0;
+  transition:opacity .25s,transform .25s;pointer-events:none;z-index:7;display:grid;place-items:center}
+.dial.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.dial svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.dial-center{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;max-width:62%}
+.dial-center small{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--glass-soft)}
+.dial-center b{font-family:var(--font-display);font-weight:600;font-size:clamp(16px,2.3vmin,22px);line-height:1.15}
+.dial-center span{font-size:12px;color:var(--glass-soft)}
+.hand-cursor{position:absolute;width:34px;height:34px;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:7;opacity:0;transition:opacity .2s,width .15s,height .15s}
+.hand-cursor.on{opacity:1}
+.hand-cursor.pinch{width:22px;height:22px;background:rgba(255,255,255,.9)}
 
-/* ---------- Pantalla de inicio ---------- */
-.start{position:fixed;inset:0;z-index:20;background:radial-gradient(120% 80% at 50% 20%,#1b2024,var(--ink));display:grid;place-items:center;
+/* Modales */
+.modal{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(6,9,14,.45);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
   padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.start-inner{max-width:520px;display:flex;flex-direction:column;align-items:center;gap:22px;text-align:center}
-.start svg{width:min(320px,80vw);height:auto}
-.start h1{font-family:var(--font-display);font-size:clamp(30px,6vw,46px);line-height:1.08;margin:0;text-wrap:balance}
-.start p{margin:0;color:var(--muted);line-height:1.55;max-width:42ch}
-.cta{background:var(--carey);color:var(--carey-ink);border:0;border-radius:999px;padding:16px 34px;font-family:var(--font-display);font-size:18px;font-weight:600}
-.cta:disabled{opacity:.6;cursor:progress}
-.status{font-size:14px;color:var(--muted);min-height:1.4em}
-.status.err{color:#ff9b8a;max-width:46ch;line-height:1.5}
-.measure{font-variant-numeric:tabular-nums;font-size:12px;letter-spacing:.12em;color:var(--carey)}
-
-/* ---------- Foto ---------- */
-.modal{position:fixed;inset:0;z-index:30;background:rgba(5,7,8,.86);display:grid;place-items:center;
-  padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.modal-card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:14px;max-width:min(560px,100%);max-height:100%}
-.modal-card img{border-radius:10px;max-height:70dvh;object-fit:contain;background:#000}
+.modal-card{border-radius:30px;padding:20px;display:flex;flex-direction:column;gap:16px;max-width:min(620px,100%);max-height:100%;overflow:auto}
+.modal-card img{border-radius:18px;max-height:64vh;object-fit:contain;background:#000}
+.modal-card h3{margin:0;font-family:var(--font-display);font-weight:600;font-size:22px}
 .modal-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
-.btn{border:1.5px solid var(--line);background:var(--raise);border-radius:999px;padding:11px 18px;font-weight:600;text-decoration:none;color:var(--text)}
-.btn.primary{background:var(--carey);border-color:var(--carey);color:var(--carey-ink)}
+.btn{border-radius:var(--r-pill);padding:13px 22px;font-weight:700;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);color:#fff;text-decoration:none;display:inline-flex;align-items:center}
+.btn.primary{background:#fff;color:var(--ink);text-shadow:none}
+.steps{display:grid;gap:12px;margin:0;padding:0;list-style:none;counter-reset:s}
+.steps li{display:grid;grid-template-columns:64px 1fr;gap:14px;align-items:center;padding:12px;border-radius:20px;background:rgba(255,255,255,.12)}
+.steps svg{width:64px;height:64px}
+.steps b{display:block;font-size:16px}
+.steps span{font-size:14px;color:var(--glass-soft);line-height:1.45}
+.toast{position:fixed;left:50%;top:calc(96px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:40;border-radius:var(--r-pill);padding:13px 22px;font-weight:600;max-width:min(560px,calc(100vw - 32px));text-align:center}
 
-.upload{align-self:flex-start;cursor:pointer;border-style:dashed;color:var(--muted)}
-.upload:hover{color:var(--text)}
-.frame-card img{width:100%;height:52px;object-fit:contain;display:block}
-.frame-card .ph{height:52px;display:grid;place-items:center;font-size:11px;color:var(--muted)}
-.credits{margin:0;font-size:11px;line-height:1.5;color:var(--muted)}
-.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;
-  background:var(--raise);border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:14px;max-width:min(460px,calc(100vw - 32px))}
-
-@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+@media (prefers-reduced-motion:reduce){ *{transition:none!important;animation:none!important} }
 </style>
 <script type="importmap">
 { "imports": {
@@ -152,37 +218,95 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 </head>
 <body>
 
-<div id="app">
-  <section class="stage" id="stage">
-    <canvas id="gl"></canvas>
-    <div class="topbar">
-      <div class="brand" id="brand"><span>Probador virtual</span><b>Tu Óptica</b></div>
-      <div class="top-actions">
-        <button class="icon-btn" id="btnFull" type="button">Pantalla completa</button>
-      </div>
+<!-- Filtro de refracción para el vidrio líquido (solo navegadores Chromium; el resto usa desenfoque) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="liquid" x="0" y="0" width="100%" height="100%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+    <feImage id="liquidMap" preserveAspectRatio="none" x="0" y="0" width="1" height="1" result="map"/>
+    <feDisplacementMap in="SourceGraphic" in2="map" scale="38" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<!-- ===================== ENTRADA ===================== -->
+<section class="screen intro" id="intro" aria-label="Inicio">
+  <div class="blobs" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <div class="intro-num" id="introNum" aria-hidden="true">01</div>
+  <div class="intro-shadow" id="introShadow" aria-hidden="true"></div>
+  <canvas id="introGl" aria-label="Montura en 3D: arrastra para girarla, desliza para cambiarla"></canvas>
+
+  <header class="intro-top">
+    <div class="brand" id="brand"><i class="dot"></i><span>Tu Óptica</span></div>
+    <nav class="intro-nav" aria-label="Secciones"><span aria-current="true">Monturas</span><span>Transitions</span><span>Probador</span></nav>
+  </header>
+
+  <div class="intro-index" id="introIndex" aria-label="Monturas"></div>
+
+  <div class="intro-panel" id="introPanel">
+  <div class="intro-info">
+    <h1 id="introName">Redonda clásica.</h1>
+    <span class="rule"></span>
+    <p class="meta" id="introMeta">Metal · 47□22 · 145</p>
+    <p class="desc" id="introDesc"></p>
+  </div>
+
+  <div class="intro-actions">
+    <button class="cta" id="btnTry" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.8l1.4-2h6.6l1.4 2h1.8A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="12.5" r="3.6"/></svg>
+      <span id="btnTryLabel">Probármelos</span>
+    </button>
+    <div class="intro-secondary">
+      <button class="glass light pill" id="btnTransitions" type="button">Ver Transitions</button>
+      <button class="glass light pill" id="btnGestures" type="button">Cómo usar los gestos</button>
     </div>
-    <div class="hint" id="hint" hidden>Mira de frente a la cámara</div>
-    <div class="now" id="now"><b id="nowName">—</b><span id="nowInfo">—</span></div>
-    <button class="shutter" id="btnPhoto" type="button" aria-label="Tomar foto"><span>Tomar foto</span></button>
+    <div class="intro-browse">
+      <button class="glass light pill" id="introPrev" type="button" aria-label="Montura anterior"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <p class="intro-hint">Desliza para ver más monturas</p>
+      <button class="glass light pill" id="introNext" type="button" aria-label="Montura siguiente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+    <p class="status" id="status" role="status"></p>
+  </div>
+  <p class="credits">Modelos 3D de prueba (Sketchfab, CC BY 4.0, adaptados): «Anteojos» de Orking, «Glasses» de AlbertVictory y «Glasses» de C.U.V. Cabeza para oclusión: «Male Head» de Alexander Antipov (CC BY 4.0). Entorno: Poly Haven (CC0). Malla facial: MediaPipe (Apache 2.0).</p>
+
+  </div>
+</section>
+
+<!-- ===================== PROBADOR ===================== -->
+<section class="screen app" id="app" aria-label="Probador" hidden>
+  <div class="stage" id="stage">
+    <canvas id="gl"></canvas>
+    <div class="hint glass pill" id="hint" hidden>Mira de frente a la cámara</div>
     <div class="flash" id="flash"></div>
     <div class="debug" id="debug" hidden></div>
-  </section>
+  </div>
 
-  <aside class="panel" aria-label="Opciones">
-    <div class="sec">
-      <div class="sec-head"><span class="label">Monturas</span><span class="value" id="frameCount"></span></div>
+  <header class="app-top">
+    <button class="glass pill lg" id="btnHome" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>Inicio</button>
+    <div class="glass pill now lg" id="nowPill"><b id="nowName">—</b><span id="nowInfo">—</span></div>
+    <button class="glass pill dial-pill lg" id="btnDial" type="button" aria-pressed="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11m0-1.5V4a1.5 1.5 0 0 1 3 0v6m0-4.5a1.5 1.5 0 0 1 3 0V12m0-3.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-5-2.7L3.6 14a1.6 1.6 0 0 1 2.5-2l1.9 2"/></svg>
+      <span class="dial-pre">Dial:</span><span id="dialLabel">Gestos</span>
+    </button>
+  </header>
+
+  <nav class="glass rail lg" id="rail" role="tablist" aria-label="Opciones">
+    <button type="button" role="tab" data-tab="monturas" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6.5" cy="13" r="3.8"/><circle cx="17.5" cy="13" r="3.8"/><path d="M10.3 12.4c1.1-.8 2.3-.8 3.4 0M2.7 12 2 9.5M21.3 12l.7-2.5"/></svg>Monturas</button>
+    <button type="button" role="tab" data-tab="color" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.6-1.2 1-2-.6-1-.2-2.3 1.2-2.3H17a4 4 0 0 0 4-4C21 7 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7.5" r="1.2" fill="currentColor"/><circle cx="15" cy="7.8" r="1.2" fill="currentColor"/></svg>Color</button>
+    <button type="button" role="tab" data-tab="transitions" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>Transitions</button>
+    <button type="button" role="tab" data-tab="tratamientos" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l7 3v5.5c0 4.4-3 7.8-7 9.5-4-1.7-7-5.1-7-9.5V6z"/><path d="M8.8 12.2l2.2 2.2 4.2-4.6"/></svg>Lentes</button>
+  </nav>
+
+  <div class="glass sheet lg" id="sheet">
+    <div class="tab" data-tab="monturas">
+      <h2>Monturas <small id="frameCount"></small></h2>
       <div class="frames" id="frames"></div>
       <label class="chip upload" for="fileGlb" id="uploadChip" hidden>Probar un modelo propio (.glb)</label>
       <input type="file" id="fileGlb" accept=".glb,model/gltf-binary" hidden>
     </div>
-
-    <div class="sec">
-      <div class="sec-head"><span class="label">Color de montura</span><span class="swatch-name" id="colorName"></span></div>
+    <div class="tab" data-tab="color" hidden>
+      <h2>Color de la montura <small id="colorName"></small></h2>
       <div class="swatches" id="swatches"></div>
     </div>
-
-    <div class="sec">
-      <div class="sec-head"><span class="label">Transitions</span><span class="value" id="tintValue">Interior</span></div>
+    <div class="tab" data-tab="transitions" hidden>
+      <h2>Transitions <small id="tintValue">Interior</small></h2>
       <div class="row" id="trTypes"></div>
       <p class="tr-desc" id="trDesc"></p>
       <div class="row" id="trColors"></div>
@@ -195,42 +319,27 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
       <input type="range" id="tint" min="0" max="100" value="0" aria-label="Cantidad de luz">
       <div class="range-ends"><span>Interior</span><span>Carro</span><span>Sol directo</span></div>
     </div>
-
-    <div class="sec">
-      <span class="label">Tratamientos</span>
+    <div class="tab" data-tab="tratamientos" hidden>
+      <h2>Tratamientos del lente</h2>
       <div class="toggles">
-        <button class="toggle" id="tgAR" type="button" aria-pressed="false">
-          <div><b>Antirreflejo</b><small>Quita los brillos del lente</small></div><span class="switch"></span>
-        </button>
-        <button class="toggle" id="tgBlue" type="button" aria-pressed="false">
-          <div><b>Filtro luz azul</b><small>Para pantallas y celular</small></div><span class="switch"></span>
-        </button>
+        <button class="toggle" id="tgAR" type="button" aria-pressed="false"><div><b>Antirreflejo</b><small>Quita los brillos del lente</small></div><span class="switch"></span></button>
+        <button class="toggle" id="tgBlue" type="button" aria-pressed="false"><div><b>Filtro luz azul</b><small>Para pantallas y celular</small></div><span class="switch"></span></button>
       </div>
     </div>
-
-    <p class="credits">Modelos 3D de prueba (Sketchfab, licencia CC BY 4.0, adaptados): «Anteojos» de Orking, «Glasses» de AlbertVictory y «Glasses» de C.U.V. Cabeza para oclusión: «Male Head» de Alexander Antipov (CC BY 4.0). Malla facial: MediaPipe (Apache 2.0).</p>
-  </aside>
-</div>
-
-<div class="start" id="start">
-  <div class="start-inner">
-    <svg viewBox="0 0 320 120" aria-hidden="true">
-      <g fill="none" stroke="#d6a15a" stroke-width="5" stroke-linejoin="round">
-        <path d="M30 40 Q30 28 44 28 H128 Q140 28 139 42 L134 74 Q130 94 108 94 H62 Q38 94 34 76 Z"/>
-        <path d="M290 40 Q290 28 276 28 H192 Q180 28 181 42 L186 74 Q190 94 212 94 H258 Q282 94 286 76 Z"/>
-        <path d="M139 44 Q160 32 181 44"/>
-      </g>
-      <text x="160" y="116" text-anchor="middle" fill="#97a1a7" font-size="11" letter-spacing="2" font-family="Manrope, sans-serif">52 □ 18 · 145</text>
-    </svg>
-    <h1>Pruébate tus lentes antes de llevarlos</h1>
-    <p>Cambia de montura, mira cómo se oscurece un lente Transitions al sol y compara tratamientos, todo en tiempo real con la cámara.</p>
-    <button class="cta" id="btnStart" type="button">Empezar</button>
-    <div class="status" id="status"></div>
   </div>
-</div>
 
+  <button class="glass shutter lg" id="btnPhoto" type="button" aria-label="Tomar foto"><span></span></button>
+
+  <div class="dial glass" id="dial" aria-hidden="true">
+    <svg viewBox="-100 -100 200 200" id="dialSvg"></svg>
+    <div class="dial-center"><small id="dialParam">Oscuridad</small><b id="dialValue">Interior</b><span id="dialHint">Gira la mano</span></div>
+  </div>
+  <div class="hand-cursor glass" id="handCursor"></div>
+</section>
+
+<!-- Foto -->
 <div class="modal" id="modal" hidden>
-  <div class="modal-card">
+  <div class="glass modal-card">
     <img id="photoImg" alt="Foto con la montura puesta">
     <div class="modal-actions">
       <button class="btn" id="btnClose" type="button">Cerrar</button>
@@ -239,16 +348,31 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
   </div>
 </div>
 
+<!-- Tutorial de gestos -->
+<div class="modal" id="gestureHelp" hidden>
+  <div class="glass modal-card" style="max-width:520px">
+    <h3>El dial con la mano</h3>
+    <ol class="steps">
+      <li><svg viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M22 40c-3-6-1-14 6-18 5-3 12-1 15 4"/><circle cx="43" cy="27" r="4" fill="#fff"/><path d="M30 46c8 4 18 0 20-9"/></svg>
+        <div><b>Junta el pulgar y el índice</b><span>Como si tomaras una perilla. Aparece el dial.</span></div></li>
+      <li><svg viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M14 32a18 18 0 0 1 32-11"/><path d="M46 13v8h-8"/><path d="M50 32a18 18 0 0 1-32 11"/><path d="M18 51v-8h8"/></svg>
+        <div><b>Gira la mano</b><span>Hacia la derecha sube, hacia la izquierda baja. Suelta para dejarlo así.</span></div></li>
+      <li><svg viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M22 36V18m8 16V12m8 22V14m8 22V22M18 38c0 10 6 16 16 16s14-6 14-16"/></svg>
+        <div><b>Abre la mano un segundo</b><span>Cambias lo que controla el dial: oscuridad del lente, color de la montura, montura o color del lente.</span></div></li>
+    </ol>
+    <div class="modal-actions"><button class="btn primary" id="btnHelpClose" type="button">Entendido</button></div>
+  </div>
+</div>
+
+<div class="toast glass" id="toast" role="status" hidden></div>
 <!--MODELOS_EMBEBIDOS-->
-<div class="toast" id="toast" role="status" hidden></div>
 
 <script>
-  // Si los módulos no cargan (sin internet en la primera carga), avisar.
   setTimeout(function(){
     if(!window.__probadorListo){
       var s=document.getElementById('status');
       s.className='status err';
-      s.textContent='No se pudieron cargar las librerías. Esta versión de prueba necesita internet la primera vez que se abre.';
+      s.textContent='No se pudieron cargar las librerías. Esta versión necesita internet la primera vez que se abre.';
     }
   },15000);
 </script>
@@ -258,7 +382,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
-import { FaceLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
+import { FaceLandmarker, HandLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
 
 window.__probadorListo = true;
 
@@ -331,24 +455,24 @@ function fitPose(live, canon = CANON_V, idx = POSE_IDX){
    ========================================================= */
 const FRAMES = [
   // ---- Modelos 3D reales (GLB). "anchoMm" fija el ancho frontal real de la montura.
-  { id:'redonda', nombre:'Redonda clásica', estilo:'Metal', ref:'OPT-204', medidas:'47□22 · 145',
+  { id:'redonda', desc:'Aro metálico fino y lentes redondos: un clásico liviano que suaviza los rostros angulosos.', nombre:'Redonda clásica', estilo:'Metal', ref:'OPT-204', medidas:'47□22 · 145',
     modelo:'monturas/redonda-metal.glb', anchoMm:130,
     colores:[{n:'Plata', muestra:'#c9ced2'},{n:'Dorado', hex:'#e8bd6a', muestra:'#d4a64f'},{n:'Negro mate', hex:'#3a3a3a', rough:0.65, muestra:'#2b2b2b'}] },
-  { id:'rectangular', nombre:'Rectangular', estilo:'Acetato', ref:'OPT-118', medidas:'54□17 · 145',
+  { id:'rectangular', desc:'Acetato mate de líneas rectas. Va con todo y le da estructura a los rostros redondos.', nombre:'Rectangular', estilo:'Acetato', ref:'OPT-118', medidas:'54□17 · 145',
     modelo:'monturas/rectangular-acetato.glb', anchoMm:138,
     colores:[{n:'Negro mate', muestra:'#1a1a1a'},{n:'Negro brillante', hex:'#0e0e0e', rough:0.22, muestra:'#0e0e0e'},
              {n:'Azul noche', hex:'#1d2c4f', rough:0.3, muestra:'#1d2c4f'},{n:'Vino', hex:'#5c1622', rough:0.3, muestra:'#5c1622'}] },
-  { id:'semi', nombre:'Semi al aire', estilo:'Metal · nylon', ref:'OPT-415', medidas:'53□18 · 140',
+  { id:'semi', desc:'Aro metálico arriba y lente al aire abajo: discreta, liviana y muy de oficina.', nombre:'Semi al aire', estilo:'Metal · nylon', ref:'OPT-415', medidas:'53□18 · 140',
     modelo:'monturas/semi-al-aire.glb', anchoMm:135,
     colores:[{n:'Grafito y azul', muestra:'#2b2f36'}] },
   // ---- Monturas generadas por código (marcador de posición)
-  { id:'wayfarer', nombre:'Wayfarer', estilo:'Acetato', ref:'OPT-101', medidas:'52□18 · 145',
+  { id:'wayfarer', desc:'La forma más reconocible del acetato: segura, versátil y con carácter.', nombre:'Wayfarer', estilo:'Acetato', ref:'OPT-101', medidas:'52□18 · 145',
     shape:'wayfarer', metal:false, rim:0.042, brow:0.7, depth:0.032, bridge:0.12, offY:0.01,
     colores:[{n:'Negro brillante',hex:'#151515'},{n:'Carey',hex:'carey'},{n:'Cristal',hex:'#dfe4e6',clear:true}] },
-  { id:'gatita', nombre:'Ojo de gato', estilo:'Acetato', ref:'OPT-122', medidas:'53□17 · 140',
+  { id:'gatita', desc:'Esquinas que suben y abren la mirada. Femenina y con presencia.', nombre:'Ojo de gato', estilo:'Acetato', ref:'OPT-122', medidas:'53□17 · 140',
     shape:'catEye', metal:false, rim:0.038, brow:0.9, depth:0.03, bridge:0.12, offY:0.012,
     colores:[{n:'Carey',hex:'carey'},{n:'Vino',hex:'#6b1d2a'},{n:'Negro brillante',hex:'#151515'}] },
-  { id:'aviador', nombre:'Aviador', estilo:'Metal doble puente', ref:'OPT-310', medidas:'58□14 · 140',
+  { id:'aviador', desc:'Doble puente y lentes en gota: el ícono de las gafas de sol.', nombre:'Aviador', estilo:'Metal doble puente', ref:'OPT-310', medidas:'58□14 · 140',
     shape:'aviador', metal:true, rim:0.011, depth:0.012, bridge:0.13, offY:-0.005, doubleBridge:true,
     colores:[{n:'Dorado',hex:'#c9a45c'},{n:'Gunmetal',hex:'#5a5f63'},{n:'Plata',hex:'#c9ced2'}] },
 ];
@@ -686,6 +810,7 @@ function updateLens(){
   const slider = document.getElementById('tint');
   if (document.activeElement !== slider) slider.value = Math.round(L * 100);
   document.querySelectorAll('#trLight .chip').forEach(c => c.setAttribute('aria-pressed', String(Math.abs(+c.dataset.l - state.tintTarget) < 0.01)));
+  dialRefresh();
 }
 
 /* =========================================================
@@ -1490,6 +1615,7 @@ const hint = document.getElementById('hint');
 const debugEl = document.getElementById('debug');
 function loop(){
   requestAnimationFrame(loop);
+  if (screen !== 'app') return;            // en la entrada no hace falta seguir la cara
   const now = performance.now();
   const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
   fps = fps * 0.9 + (1 / Math.max(dt, 1e-3)) * 0.1;
@@ -1509,7 +1635,9 @@ function loop(){
       if (lostFrames > 8){ anchor.visible = false; faceOcc.visible = false; }
     }
     hint.hidden = anchor.visible;
+    if (anchor.visible) lastActivity = now;
   }
+  gestureTick(now);
 
   // Animación Transitions (comprimida para la demo: en la vida real tarda ~30 s)
   if (state.tint !== state.tintTarget){
@@ -1532,10 +1660,39 @@ function loop(){
 
 /* =========================================================
    INTERFAZ
+   Dos pantallas: la entrada (estudio con los lentes flotando) y el probador (cámara completa con vidrio líquido).
    ========================================================= */
-const framesEl = document.getElementById('frames');
-const swatchesEl = document.getElementById('swatches');
+let screen = 'intro';
+let lastActivity = performance.now();
+const $ = id => document.getElementById(id);
+const framesEl = $('frames'), swatchesEl = $('swatches');
 
+/* ---------- Vidrio líquido: mapa de desplazamiento para la refracción en los bordes (Chromium) ---------- */
+(function liquidGlass(){
+  const ua = navigator.userAgent;
+  const chromium = /Chrome\/|Chromium\//.test(ua) && !/iPhone|iPad|iPod/.test(ua);
+  if (!chromium) return;
+  const N = 256, c = document.createElement('canvas'); c.width = c.height = N;
+  const g = c.getContext('2d'), img = g.createImageData(N, N), r = 0.22, band = 0.16;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++){
+    const u = (x + 0.5) / N, v = (y + 0.5) / N;
+    // distancia al borde de un rectángulo redondeado y dirección hacia afuera
+    const qx = Math.max(Math.abs(u - 0.5) - (0.5 - r), 0), qy = Math.max(Math.abs(v - 0.5) - (0.5 - r), 0);
+    const inside = Math.min(Math.max(Math.abs(u - 0.5) - (0.5 - r), Math.abs(v - 0.5) - (0.5 - r)), 0);
+    const d = r - (Math.hypot(qx, qy) + inside);          // 0 en el borde, crece hacia el centro
+    let nx = Math.sign(u - 0.5) * (qx > 0 ? qx : (Math.abs(u - 0.5) > Math.abs(v - 0.5) ? 1 : 0));
+    let ny = Math.sign(v - 0.5) * (qy > 0 ? qy : (Math.abs(v - 0.5) >= Math.abs(u - 0.5) ? 1 : 0));
+    const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+    const k = Math.max(0, 1 - d / band) ** 2;              // solo cerca del borde
+    const i = (y * N + x) * 4;
+    img.data[i] = 128 - nx * k * 127; img.data[i + 1] = 128 - ny * k * 127; img.data[i + 2] = 128; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  $('liquidMap').setAttribute('href', c.toDataURL());
+  document.body.classList.add('refract');
+})();
+
+/* ---------- Miniaturas de las monturas generadas por código ---------- */
 function drawThumb(cv, def, col){
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const W = 240, H = 90; cv.width = W * dpr; cv.height = H * dpr;
@@ -1559,6 +1716,7 @@ function drawThumb(cv, def, col){
   g.globalAlpha = 1;
 }
 
+/* ---------- Monturas y colores (probador) ---------- */
 function buildFramesUI(){
   framesEl.innerHTML = '';
   FRAMES.forEach((def, i) => {
@@ -1578,16 +1736,16 @@ function buildFramesUI(){
       drawThumb(cv, def, def.colores[0]);
     }
   });
-  document.getElementById('frameCount').textContent = FRAMES.length + ' modelos';
+  $('frameCount').textContent = FRAMES.length + ' modelos';
+  buildIntroIndex();
 }
-
 function swatchBg(col){
   if (col.hex === 'carey') return 'radial-gradient(circle at 30% 30%, #c98a3d, #6b3a14 55%, #2a1608)';
   return col.muestra || col.hex || '#888';
 }
 function renderFrameUI(){
   const def = FRAMES[state.frame], col = def.colores[state.color];
-  FRAMES.forEach((f, i) => document.getElementById('frame-' + f.id).setAttribute('aria-pressed', String(i === state.frame)));
+  FRAMES.forEach((f, i) => $('frame-' + f.id)?.setAttribute('aria-pressed', String(i === state.frame)));
   swatchesEl.innerHTML = '';
   def.colores.forEach((c, i) => {
     const s = document.createElement('button');
@@ -1596,13 +1754,14 @@ function renderFrameUI(){
     s.addEventListener('click', () => setFrame(state.frame, i));
     swatchesEl.append(s);
   });
-  document.getElementById('colorName').textContent = col.n;
-  document.getElementById('nowName').textContent = def.nombre + ' · ' + col.n;
-  document.getElementById('nowInfo').textContent = def.estilo + ' · ' + def.medidas + ' · ' + def.ref;
-  const card = document.getElementById('frame-' + def.id);
-  card.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  $('colorName').textContent = col.n;
+  $('nowName').textContent = def.nombre + ' · ' + col.n;
+  $('nowInfo').textContent = def.estilo + ' · ' + def.medidas;
+  if (screen === 'app') $('frame-' + def.id)?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  dialRefresh();
 }
 
+/* ---------- Transitions ---------- */
 function chip(label, pressed, onClick, dotHex){
   const b = document.createElement('button');
   b.type = 'button'; b.className = 'chip small';
@@ -1614,52 +1773,53 @@ function chip(label, pressed, onClick, dotHex){
 }
 function buildTintUI(){
   const tr = TR_BY[state.trType];
-  const types = document.getElementById('trTypes'); types.innerHTML = '';
+  const types = $('trTypes'); types.innerHTML = '';
   for (const t of TR) types.append(chip(t.n, t.id === state.trType, () => {
     state.trType = t.id; state.trColor = 0; state.mirror = 0;
-    // al elegir un tipo con color, mostrarlo activado
-    if (t.id !== 'claro' && state.tintTarget < 0.5){ state.tintTarget = 1; }
+    if (t.id !== 'claro' && state.tintTarget < 0.5) state.tintTarget = 1;
     buildTintUI(); updateLens();
   }));
-  document.getElementById('trDesc').textContent = tr.desc;
-  const cols = document.getElementById('trColors'); cols.innerHTML = '';
+  $('trDesc').textContent = tr.desc;
+  const cols = $('trColors'); cols.innerHTML = '';
   if (tr.colores.length > 1) tr.colores.forEach((c, i) => cols.append(chip(c.n, i === state.trColor, () => {
     state.trColor = i; if (state.tintTarget < 0.5) state.tintTarget = 1; buildTintUI(); updateLens();
   }, c.hex)));
-  const extra = document.getElementById('trExtra'); extra.innerHTML = '';
+  const extra = $('trExtra'); extra.innerHTML = '';
   if (tr.acabados){
     extra.append(chip('Degradado', state.degradado, () => { state.degradado = true; buildTintUI(); updateLens(); }));
     extra.append(chip('Uniforme', !state.degradado, () => { state.degradado = false; buildTintUI(); updateLens(); }));
   }
   if (tr.espejos) tr.espejos.forEach((e, i) => extra.append(chip(e.n, i === state.mirror, () => { state.mirror = i; buildTintUI(); updateLens(); }, e.hex)));
-  document.getElementById('trLight').hidden = tr.id === 'claro';
-  document.getElementById('tint').hidden = tr.id === 'claro';
-  document.querySelector('.range-ends').hidden = tr.id === 'claro';
+  const none = tr.id === 'claro';
+  $('trLight').hidden = none; $('tint').hidden = none; document.querySelector('.range-ends').hidden = none;
 }
 document.querySelectorAll('#trLight .chip').forEach(c => c.addEventListener('click', () => { state.tintTarget = +c.dataset.l; updateLens(); }));
-
-document.getElementById('tint').addEventListener('input', e => {
-  state.tint = state.tintTarget = e.target.value / 100;
-  updateLens();
-});
-
+$('tint').addEventListener('input', e => { state.tint = state.tintTarget = e.target.value / 100; updateLens(); });
 function bindToggle(id, key){
-  const el = document.getElementById(id);
+  const el = $(id);
   el.addEventListener('click', () => { state[key] = !state[key]; el.setAttribute('aria-pressed', String(state[key])); updateLens(); });
 }
 bindToggle('tgAR', 'ar');
 bindToggle('tgBlue', 'blue');
 
-document.getElementById('btnFull').addEventListener('click', async () => {
-  try {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else await document.documentElement.requestFullscreen();
-  } catch (e){ /* algunos navegadores no lo permiten */ }
-});
+/* ---------- Pestañas del probador ---------- */
+const rail = $('rail'), sheet = $('sheet');
+let tabOpen = 'monturas';
+function openTab(name, toggle = true){
+  if (toggle && tabOpen === name && !sheet.classList.contains('closed')){
+    sheet.classList.add('closed'); tabOpen = null;
+  } else {
+    tabOpen = name; sheet.classList.remove('closed');
+    sheet.querySelectorAll('.tab').forEach(t => t.hidden = t.dataset.tab !== name);
+    sheet.scrollTop = 0;
+  }
+  rail.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tabOpen)));
+}
+rail.querySelectorAll('button').forEach(b => b.addEventListener('click', () => openTab(b.dataset.tab)));
 
 /* ---------- Foto ---------- */
-const modal = document.getElementById('modal');
-document.getElementById('btnPhoto').addEventListener('click', () => {
+const modal = $('modal');
+$('btnPhoto').addEventListener('click', () => {
   renderer.render(scene, camera);
   const src = renderer.domElement;
   const out = document.createElement('canvas');
@@ -1667,30 +1827,419 @@ document.getElementById('btnPhoto').addEventListener('click', () => {
   const g = out.getContext('2d');
   g.save(); g.translate(out.width, 0); g.scale(-1, 1); g.drawImage(src, 0, 0); g.restore();
   const def = FRAMES[state.frame], col = def.colores[state.color];
-  const pad = Math.round(out.width * 0.03), fs = Math.max(14, Math.round(out.width * 0.028));
-  g.fillStyle = 'rgba(14,17,19,.78)'; g.fillRect(0, out.height - fs * 3.2, out.width, fs * 3.2);
-  g.fillStyle = '#eef1f2'; g.font = `600 ${fs}px Sora, sans-serif`;
-  g.fillText(`${def.nombre} · ${col.n}`, pad, out.height - fs * 1.75);
-  g.fillStyle = '#d6a15a'; g.font = `500 ${Math.round(fs * 0.7)}px Manrope, sans-serif`;
+  const pad = Math.round(out.width * 0.04), fs = Math.max(16, Math.round(Math.min(out.width, out.height) * 0.035));
+  const band = fs * 3.4;
+  const grd = g.createLinearGradient(0, out.height - band * 1.6, 0, out.height);
+  grd.addColorStop(0, 'rgba(10,12,16,0)'); grd.addColorStop(1, 'rgba(10,12,16,.72)');
+  g.fillStyle = grd; g.fillRect(0, out.height - band * 1.6, out.width, band * 1.6);
+  g.fillStyle = '#ffffff'; g.font = `600 ${fs}px Sora, sans-serif`;
+  g.fillText(`${def.nombre} · ${col.n}`, pad, out.height - fs * 1.9);
+  g.fillStyle = 'rgba(255,255,255,.78)'; g.font = `500 ${Math.round(fs * 0.62)}px Manrope, sans-serif`;
   const trd = TR_BY[state.trType], trc = trd.colores[state.trColor] || trd.colores[0];
   const mirN = trd.espejos && state.mirror ? ' espejo ' + trd.espejos[state.mirror].n.toLowerCase() : '';
   const lens = [trd.id !== 'claro' ? `Transitions ${trd.n}${trc.n !== trd.n ? ' ' + trc.n : ''}${mirN}` : null, state.ar ? 'Antirreflejo' : null, state.blue ? 'Luz azul' : null].filter(Boolean).join(' · ');
-  g.fillText(`${def.medidas} · ${def.ref}${lens ? ' · ' + lens : ''}`, pad, out.height - fs * 0.75);
+  g.fillText(`${def.medidas} · ${def.ref}${lens ? ' · ' + lens : ''}`, pad, out.height - fs * 0.85);
+  g.fillStyle = '#e5484d'; g.beginPath(); g.arc(out.width - pad - fs * 0.3, out.height - fs * 1.5, fs * 0.22, 0, Math.PI * 2); g.fill();
   const url = out.toDataURL('image/png');
-  document.getElementById('photoImg').src = url;
-  const save = document.getElementById('btnSave');
+  $('photoImg').src = url;
+  const save = $('btnSave');
   save.href = url; save.download = `probador-${def.id}.png`;
-  const fl = document.getElementById('flash');
+  const fl = $('flash');
   fl.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => fl.classList.remove('on')));
   setTimeout(() => { modal.hidden = false; }, 250);
 });
-document.getElementById('btnClose').addEventListener('click', () => { modal.hidden = true; });
+$('btnClose').addEventListener('click', () => { modal.hidden = true; });
+
+/* =========================================================
+   ENTRADA: lentes flotando en un estudio
+   ========================================================= */
+const introEl = $('intro'), introCanvas = $('introGl');
+const introR = new THREE.WebGLRenderer({ canvas: introCanvas, antialias: true, alpha: true });
+introR.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+introR.toneMapping = THREE.ACESFilmicToneMapping; introR.toneMappingExposure = 1.05;
+const introScene = new THREE.Scene();
+introScene.environment = new THREE.PMREMGenerator(introR).fromScene(new RoomEnvironment(), 0.03).texture;
+introScene.add(new THREE.AmbientLight(0xffffff, 0.45));
+{ const k = new THREE.DirectionalLight(0xffffff, 1.6); k.position.set(-0.6, 1.2, 1.4); introScene.add(k); }
+const introCam = new THREE.PerspectiveCamera(24, 1, 0.1, 60);
+const introPivot = new THREE.Group(); introScene.add(introPivot);
+// lente de exhibición: vidrio iridiscente, como el prisma de la referencia
+const introLensMat = new THREE.MeshPhysicalMaterial({
+  color: '#eef3ff', roughness: 0.02, metalness: 0, transparent: true, opacity: 0.38,
+  iridescence: 1, iridescenceIOR: 1.32, iridescenceThicknessRange: [180, 640],
+  clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.9, side: THREE.DoubleSide, depthWrite: false,
+});
+let introIdx = 0, introObj = null, introOld = null, introSwapT = 1, introDir = 1, introDrag = 0, introDragV = 0;
+let introLoad = 0;
+
+function fitIntro(){
+  const w = introCanvas.clientWidth, h = introCanvas.clientHeight;
+  if (!w || !h) return;
+  introR.setSize(w, h, false);
+  introCam.aspect = w / h;
+  const portrait = h >= w;
+  // vertical: los lentes entre el encabezado y el panel de abajo; horizontal: a la izquierda del panel
+  const panelTop = $('introPanel').getBoundingClientRect().top || h * 0.6;
+  const fx = portrait ? 0.5 : 0.33;
+  const fy = portrait ? Math.min(0.42, ((70 + panelTop) / 2) / h) : 0.47;
+  const share = portrait ? (w < 500 ? 0.78 : 0.68) : 0.4;    // fracción del ancho que ocupa la montura
+  const visW = 1.2 / share;                                   // la montura mide ~1.2 unidades con bisagras
+  const t = Math.tan(THREE.MathUtils.degToRad(introCam.fov / 2));
+  const dist = visW / (2 * t * introCam.aspect);
+  introCam.position.set(0, 0, dist); introCam.lookAt(0, 0, 0); introCam.updateProjectionMatrix();
+  introPivot.position.y = (1 - 2 * fy) * dist * t;
+  introPivot.position.x = (2 * fx - 1) * dist * t * introCam.aspect;
+  introEl.style.setProperty('--glasses-y', (fy * 100) + '%');
+  introEl.style.setProperty('--glasses-x', (fx * 100) + '%');
+  introEl.style.setProperty('--shadow-off', (portrait ? 0.11 * w : 0.12 * h) + 'px');
+  introEl.style.setProperty('--num-top', portrait ? Math.max(8, fy * 100 - 22) + '%' : '12%');
+}
+new ResizeObserver(fitIntro).observe(introCanvas);
+
+function disposeIntroObj(o){
+  o.traverse(m => {
+    if (m.geometry && (!o.userData.compartida || m.userData.geoPropia)) m.geometry.dispose();
+    if (m.material && m.material !== introLensMat && m.material.map !== _carey) m.material.dispose?.();
+  });
+}
+async function buildIntroObj(def){
+  const saveL = lensMats, saveG = glareMats;
+  let obj;
+  if (isGLB(def)) obj = instantiateGLB(def, await loadTemplate(def), def.colores[0]);
+  else { obj = buildFrame(def, def.colores[0]); splayTemples(obj); }
+  lensMats = saveL; glareMats = saveG;
+  obj.traverse(o => {
+    if (o.isMesh && o.userData.esLente){ if (o.material !== introLensMat) o.material.dispose?.(); o.material = introLensMat; o.renderOrder = 2; }
+    if (o.isMesh) o.frustumCulled = false;
+  });
+  obj.rotation.x = 0;
+  const holder = new THREE.Group(); holder.add(obj);
+  holder.position.y = -(def.offY || 0);
+  return holder;
+}
+async function showIntroFrame(i, dir = 1){
+  introIdx = (i + FRAMES.length) % FRAMES.length;
+  const def = FRAMES[introIdx];
+  $('introName').textContent = def.nombre + '.';
+  $('introMeta').textContent = `${def.estilo} · ${def.medidas}`;
+  $('introDesc').textContent = def.desc || '';
+  $('introNum').textContent = String(introIdx + 1).padStart(2, '0');
+  [...$('introIndex').children].forEach((b, k) => b.setAttribute('aria-current', String(k === introIdx)));
+  const token = ++introLoad;
+  let obj;
+  try { obj = await buildIntroObj(def); } catch (e){ console.error(e); return; }
+  if (token !== introLoad){ disposeIntroObj(obj); return; }
+  if (introOld){ introPivot.remove(introOld); disposeIntroObj(introOld); }
+  introOld = introObj; introObj = obj; introDir = dir; introSwapT = introOld ? 0 : 1;
+  introPivot.add(obj);
+}
+function buildIntroIndex(){
+  const box = $('introIndex'); box.innerHTML = '';
+  FRAMES.forEach((def, i) => {
+    const b = document.createElement('button'); b.type = 'button';
+    b.setAttribute('aria-label', def.nombre); b.setAttribute('aria-current', String(i === introIdx));
+    b.addEventListener('click', () => showIntroFrame(i, i > introIdx ? 1 : -1));
+    box.append(b);
+  });
+}
+$('introPrev').addEventListener('click', () => showIntroFrame(introIdx - 1, -1));
+$('introNext').addEventListener('click', () => showIntroFrame(introIdx + 1, 1));
+
+// arrastrar para girar, deslizar rápido para cambiar
+let drag = null;
+introCanvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, x0: e.clientX, t: performance.now() }; introCanvas.setPointerCapture(e.pointerId); });
+introCanvas.addEventListener('pointermove', e => { if (!drag) return; const dx = e.clientX - drag.x; drag.x = e.clientX; introDragV = dx * 0.012; introDrag += introDragV; });
+introCanvas.addEventListener('pointerup', e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x0, dt = performance.now() - drag.t;
+  if (Math.abs(dx) > 70 && dt < 450) showIntroFrame(introIdx + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1);
+  drag = null;
+});
+
+const ease = t => 1 - Math.pow(1 - t, 3);
+let introRunning = false, introT0 = performance.now(), introPrevT = performance.now();
+function introLoop(now){
+  if (screen !== 'intro'){ introRunning = false; return; }
+  requestAnimationFrame(introLoop);
+  const t = (now - introT0) / 1000, dt = Math.min(0.05, (now - introPrevT) / 1000); introPrevT = now;
+  if (!drag){ introDragV *= 0.92; introDrag += introDragV; introDrag *= 0.985; }
+  introSwapT = Math.min(1, introSwapT + dt / 0.75);
+  const s = ease(introSwapT);
+  const floatY = Math.sin(t * 0.9) * 0.018;
+  if (introObj){
+    introObj.position.set((1 - s) * 0.9 * introDir, floatY, 0);
+    introObj.rotation.set(0.1 + Math.sin(t * 0.6) * 0.04, Math.sin(t * 0.32) * 0.42 + introDrag + (1 - s) * -1.2 * introDir, Math.sin(t * 0.5) * 0.02);
+    introObj.scale.setScalar(0.85 + 0.15 * s);
+  }
+  if (introOld){
+    introOld.position.set(-s * 0.9 * introDir, floatY, 0);
+    introOld.rotation.y += dt * 1.6 * introDir;
+    introOld.scale.setScalar(Math.max(0.001, 1 - 0.6 * s));
+    if (s >= 1){ introPivot.remove(introOld); disposeIntroObj(introOld); introOld = null; }
+  }
+  $('introShadow').style.opacity = String(0.7 + floatY * 8);
+  introR.render(introScene, introCam);
+}
+function startIntroLoop(){ if (!introRunning){ introRunning = true; introPrevT = performance.now(); requestAnimationFrame(introLoop); } }
+
+/* =========================================================
+   PANTALLAS
+   ========================================================= */
+let camReady = false, starting = false;
+async function startCamera(){
+  const btn = $('btnTry'), label = $('btnTryLabel'), statusEl = $('status');
+  btn.disabled = true; statusEl.className = 'status'; statusEl.textContent = '';
+  try {
+    label.textContent = 'Encendiendo la cámara…';
+    await initCamera();
+    label.textContent = 'Preparando el seguimiento…';
+    await initLandmarker();
+    camReady = true;
+    initHands();   // en segundo plano
+    return true;
+  } catch (e){
+    console.error(e);
+    statusEl.className = 'status err';
+    const msgs = {
+      NotAllowedError: 'La cámara está bloqueada. Permite el acceso a la cámara en el navegador y vuelve a intentarlo.',
+      NotFoundError: 'No se encontró ninguna cámara conectada.',
+      NotReadableError: 'Otra aplicación está usando la cámara. Ciérrala y vuelve a intentarlo.',
+      Insecure: 'El navegador no permite usar la cámara aquí. Abre la página con https o en Chrome/Edge.',
+    };
+    statusEl.textContent = msgs[e.name] || ('No se pudo iniciar: ' + (e.message || e));
+    return false;
+  } finally {
+    btn.disabled = false; label.textContent = 'Probármelos';
+  }
+}
+async function goApp(tab = 'monturas'){
+  if (starting) return;
+  starting = true;
+  try {
+    if (!camReady && !(await startCamera())) return;
+    if (state.frame !== introIdx) setFrame(introIdx, 0);
+    const app = $('app');
+    app.hidden = false; app.classList.add('entering');
+    introEl.classList.add('leaving');
+    screen = 'app';
+    requestAnimationFrame(() => requestAnimationFrame(() => app.classList.remove('entering')));
+    setTimeout(() => { introEl.hidden = true; introEl.classList.remove('leaving'); }, 650);
+    openTab(tab, false);
+    fitCamera();
+    lastActivity = performance.now();
+  } finally { starting = false; }
+}
+function goHome(){
+  if (screen === 'intro') return;
+  screen = 'intro';
+  releaseGrab(); $('handCursor').classList.remove('on');
+  introEl.hidden = false; introEl.classList.add('entering');
+  requestAnimationFrame(() => requestAnimationFrame(() => introEl.classList.remove('entering')));
+  $('app').hidden = true;
+  modal.hidden = true;
+  if (introIdx !== state.frame || !introObj) showIntroFrame(state.frame, 1);
+  fitIntro(); startIntroLoop();
+}
+$('btnTry').addEventListener('click', () => goApp('monturas'));
+$('btnTransitions').addEventListener('click', () => {
+  if (state.trType === 'claro'){ state.trType = 'gens'; state.trColor = 0; }
+  state.tintTarget = 1; buildTintUI(); updateLens();
+  goApp('transitions');
+});
+$('btnGestures').addEventListener('click', () => { $('gestureHelp').hidden = false; });
+$('btnHelpClose').addEventListener('click', () => { $('gestureHelp').hidden = true; });
+$('btnHome').addEventListener('click', goHome);
+
+// Volver solo a la entrada si nadie usa el probador
+const IDLE_MS = 75000;
+['pointerdown', 'keydown'].forEach(ev => window.addEventListener(ev, () => { lastActivity = performance.now(); }, { passive: true }));
+setInterval(() => { if (screen === 'app' && modal.hidden && performance.now() - lastActivity > IDLE_MS) goHome(); }, 2000);
+
+/* =========================================================
+   DIAL CON GESTOS DE LA MANO
+   Pellizco (pulgar + índice) = tomar la perilla. Girar la mano = cambiar el valor. Mano abierta 1 s = cambiar qué controla.
+   ========================================================= */
+let handLm = null, handFrame = 0;
+const G = { on: true, ready: false, param: 0, pinch: false, pinchT: 0, grabbed: false, grabAng: 0, grabVal: 0, palmT: 0, lastHand: 0,
+            ang: 0, rawPrev: null, angF: new OneEuro(1.6, 0.6), pos: { x: 0, y: 0 }, shownUntil: 0 };
+const LENS_OPTS = TR.flatMap(t => t.colores.map((c, ci) => ({ type: t.id, color: ci, n: t.id === 'claro' ? 'Sin Transitions' : (c.n === t.n ? t.n : `${t.n} · ${c.n}`) })));
+const DIAL = [
+  { id: 'luz', n: 'Oscuridad del lente', kind: 'cont', short: 'Oscuridad',
+    get: () => state.tintTarget, set: v => { state.tint = state.tintTarget = v; updateLens(); },
+    label: () => TR_BY[state.trType].id === 'claro' ? 'Lente claro' : lightName(state.tint) },
+  { id: 'color', n: 'Color de la montura', kind: 'disc', short: 'Color',
+    count: () => FRAMES[state.frame].colores.length, get: () => state.color, set: i => setFrame(state.frame, i),
+    label: () => FRAMES[state.frame].colores[state.color].n },
+  { id: 'montura', n: 'Montura', kind: 'disc', short: 'Montura',
+    count: () => FRAMES.length, get: () => state.frame, set: i => setFrame(i, 0), label: () => FRAMES[state.frame].nombre },
+  { id: 'lente', n: 'Color del lente', kind: 'disc', short: 'Lente',
+    count: () => LENS_OPTS.length,
+    get: () => Math.max(0, LENS_OPTS.findIndex(o => o.type === state.trType && o.color === state.trColor)),
+    set: i => { const o = LENS_OPTS[i]; state.trType = o.type; state.trColor = o.color; state.mirror = 0;
+                if (o.type !== 'claro' && state.tintTarget < 0.5) state.tintTarget = 1; buildTintUI(); updateLens(); },
+    label: () => LENS_OPTS[Math.max(0, LENS_OPTS.findIndex(o => o.type === state.trType && o.color === state.trColor))].n },
+];
+const STEP = THREE.MathUtils.degToRad(24);   // un paso del dial cada 24° de giro
+
+async function initHands(){
+  try {
+    const fileset = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+    const opts = delegate => ({
+      baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate },
+      runningMode: 'VIDEO', numHands: 1, minHandDetectionConfidence: 0.6, minHandPresenceConfidence: 0.6, minTrackingConfidence: 0.5,
+    });
+    try { handLm = await HandLandmarker.createFromOptions(fileset, opts('GPU')); }
+    catch (e){ handLm = await HandLandmarker.createFromOptions(fileset, opts('CPU')); }
+    G.ready = true; updateDialPill();
+  } catch (e){
+    console.warn('Gestos no disponibles', e);
+    G.ready = false; $('dialLabel').textContent = 'Gestos no disponibles';
+  }
+}
+function updateDialPill(){
+  $('dialLabel').textContent = !G.ready ? 'Cargando…' : G.on ? DIAL[G.param].short : 'Apagados';
+  $('btnDial').setAttribute('aria-pressed', String(G.on && G.ready));
+}
+$('btnDial').addEventListener('click', () => {
+  if (state.debug){ G.on = !G.on; updateDialPill(); toast(G.on ? 'Gestos activados' : 'Gestos desactivados', 1600); return; }
+  nextParam(true);
+});
+function nextParam(fromTap){
+  G.param = (G.param + 1) % DIAL.length;
+  updateDialPill();
+  const r = $('app').getBoundingClientRect();
+  showDial(fromTap ? r.width / 2 : G.pos.x, fromTap ? r.height * 0.5 : G.pos.y, 1400);
+}
+
+// coordenadas normalizadas del video → píxeles de pantalla (con el espejo)
+function videoToScreen(nx, ny){
+  const W = stage.clientWidth, H = stage.clientHeight;
+  const vx = nx * vw, vy = (1 - ny) * vh;
+  const sx = (vx - camera.left) / (camera.right - camera.left) * W;
+  const sy = (camera.top - vy) / (camera.top - camera.bottom) * H;
+  return { x: W - sx, y: sy };
+}
+const dist2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+function isOpenPalm(lm){
+  const w = lm[0], d = i => Math.hypot(lm[i].x - w.x, lm[i].y - w.y);
+  const fingers = [[8, 6], [12, 10], [16, 14], [20, 18]].every(([tip, pip]) => d(tip) > d(pip) * 1.12);
+  const size = d(9);
+  const thumbOut = Math.hypot(lm[4].x - lm[5].x, lm[4].y - lm[5].y) > size * 0.55;
+  const spread = Math.hypot(lm[8].x - lm[20].x, lm[8].y - lm[20].y) > size * 0.75;
+  return fingers && thumbOut && spread;
+}
+function gestureTick(now){
+  if (!G.on || !handLm || screen !== 'app' || !vw) return;
+  if (++handFrame % 2) return;                  // la mano se analiza un cuadro sí y uno no
+  let res;
+  try { res = handLm.detectForVideo(video, now); } catch (e){ return; }
+  handStep(res, now);
+}
+function handStep(res, now){
+  const lm = res && res.landmarks && res.landmarks[0];
+  const cursor = $('handCursor');
+  if (!lm){
+    if (now - G.lastHand > 350){ releaseGrab(); cursor.classList.remove('on'); }
+    if (now > G.shownUntil && !G.grabbed) $('dial').classList.remove('on');
+    return;
+  }
+  G.lastHand = now; lastActivity = now;
+  const P = i => videoToScreen(lm[i].x, lm[i].y);
+  const p0 = P(0), p4 = P(4), p8 = P(8), p9 = P(9);
+  const size = Math.max(1, dist2(p0, p9));
+  const pd = dist2(p4, p8) / size;
+  const pinching = G.pinch ? pd < 0.5 : pd < 0.3;
+  const mid = { x: (p4.x + p8.x) / 2, y: (p4.y + p8.y) / 2 };
+  // ángulo de la mano (muñeca → nudillo del medio), continuo y suavizado
+  const raw = Math.atan2(p9.y - p0.y, p9.x - p0.x);
+  if (G.rawPrev == null) G.ang = raw;
+  else { let d = raw - G.rawPrev; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; G.ang += d; }
+  G.rawPrev = raw;
+  const ang = G.angF.filter(G.ang, now / 1000);
+
+  cursor.classList.add('on'); cursor.classList.toggle('pinch', pinching);
+  const cp = pinching ? mid : p8;
+  cursor.style.left = cp.x + 'px'; cursor.style.top = cp.y + 'px';
+  G.pos = mid;
+
+  if (pinching && !G.pinch){ G.pinch = true; G.pinchT = now; }
+  if (!pinching && G.pinch){ G.pinch = false; releaseGrab(); }
+  if (G.pinch && !G.grabbed && now - G.pinchT > 160){
+    const p = DIAL[G.param];
+    G.grabbed = true; G.grabAng = ang; G.grabVal = p.get();
+    showDial(mid.x, mid.y);
+  }
+  if (G.grabbed){
+    const p = DIAL[G.param], delta = ang - G.grabAng;
+    if (p.kind === 'cont'){
+      const v = THREE.MathUtils.clamp(G.grabVal + delta / (Math.PI * 0.7), 0, 1);
+      if (Math.abs(v - p.get()) > 0.004) p.set(v);
+    } else {
+      const n = p.count(), idx = (((G.grabVal + Math.round(delta / STEP)) % n) + n) % n;
+      if (idx !== p.get()){ p.set(idx); pulseDial(); }
+    }
+    dialRefresh(delta);
+  }
+  // mano abierta un momento: cambiar lo que controla el dial
+  if (!G.pinch && isOpenPalm(lm)){
+    if (!G.palmT) G.palmT = now;
+    else if (now - G.palmT > 900){ G.palmT = now + 1e6; nextParam(false); }
+  } else if (G.palmT && G.palmT < now + 1e5) G.palmT = 0;
+  else if (!isOpenPalm(lm)) G.palmT = 0;
+}
+function releaseGrab(){
+  if (G.grabbed){ G.grabbed = false; G.shownUntil = performance.now() + 900; setTimeout(() => { if (!G.grabbed && performance.now() >= G.shownUntil) $('dial').classList.remove('on'); }, 950); }
+}
+function showDial(x, y, ms){
+  const d = $('dial'), app = $('app'), r = d.offsetWidth / 2 || 140;
+  const W = app.clientWidth, H = app.clientHeight;
+  const railW = $('rail').offsetWidth + 28;   // sin tapar el riel de la derecha
+  d.style.left = THREE.MathUtils.clamp(x, r + 12, W - r - railW) + 'px';
+  d.style.top = THREE.MathUtils.clamp(y, r + 80, H - r - 12) + 'px';
+  d.classList.add('on');
+  dialRefresh(0);
+  if (ms){ G.shownUntil = performance.now() + ms; setTimeout(() => { if (!G.grabbed && performance.now() >= G.shownUntil) d.classList.remove('on'); }, ms + 50); }
+}
+function pulseDial(){ const d = $('dial'); d.animate([{ transform: 'translate(-50%,-50%) scale(1.06)' }, { transform: 'translate(-50%,-50%) scale(1)' }], { duration: 180 }); }
+function dialRefresh(delta = 0){
+  const p = DIAL[G.param], svg = $('dialSvg');
+  if (!svg) return;
+  $('dialParam').textContent = p.n;
+  $('dialValue').textContent = p.label();
+  $('dialHint').textContent = G.grabbed ? 'Suelta para dejarlo así' : 'Pellizca y gira la mano';
+  const R = 86, parts = [];
+  parts.push(`<circle r="${R}" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="10"/>`);
+  if (p.kind === 'cont'){
+    // arco de -135° a +135°
+    const a0 = -225, a1 = 45, v = p.get(), av = a0 + (a1 - a0) * v;
+    const pt = a => [R * Math.cos(a * Math.PI / 180), R * Math.sin(a * Math.PI / 180)];
+    const [x0, y0] = pt(a0), [x1, y1] = pt(av), [xe, ye] = pt(a1);
+    parts.push(`<path d="M${x0} ${y0} A${R} ${R} 0 1 1 ${xe} ${ye}" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="10" stroke-linecap="round"/>`);
+    parts.push(`<path d="M${x0} ${y0} A${R} ${R} 0 ${av - a0 > 180 ? 1 : 0} 1 ${x1} ${y1}" fill="none" stroke="url(#dialGrad)" stroke-width="10" stroke-linecap="round"/>`);
+    parts.push(`<circle cx="${x1}" cy="${y1}" r="9" fill="#fff"/>`);
+  } else {
+    const n = p.count(), cur = p.get();
+    for (let i = 0; i < n; i++){
+      const a = (-90 + (i - cur) * (360 / Math.max(n, 12))) * Math.PI / 180;
+      const on = i === cur, r0 = on ? R - 14 : R - 8, r1 = on ? R + 8 : R + 2;
+      parts.push(`<line x1="${r0 * Math.cos(a)}" y1="${r0 * Math.sin(a)}" x2="${r1 * Math.cos(a)}" y2="${r1 * Math.sin(a)}" stroke="${on ? '#fff' : 'rgba(255,255,255,.55)'}" stroke-width="${on ? 5 : 2.5}" stroke-linecap="round"/>`);
+    }
+  }
+  // indicador del giro de la mano
+  if (G.grabbed){   // marca del giro de la mano, sobre el borde exterior
+    const a = -90 * Math.PI / 180 + delta;
+    parts.push(`<circle cx="${(R + 16) * Math.cos(a)}" cy="${(R + 16) * Math.sin(a)}" r="6" fill="#fff" stroke="rgba(0,0,0,.25)"/>`);
+  }
+  svg.innerHTML = `<defs><linearGradient id="dialGrad" x1="0" x2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#9fb8ff"/><stop offset="1" stop-color="#3a3f4a"/></linearGradient></defs>${parts.join('')}`;
+}
 
 /* ---------- Teclado (para la demo en laptop) ---------- */
 window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
-  if (e.key === 'ArrowRight') setFrame(state.frame + 1);
-  else if (e.key === 'ArrowLeft') setFrame(state.frame - 1);
+  if (e.key === 'ArrowRight'){ screen === 'intro' ? showIntroFrame(introIdx + 1, 1) : setFrame(state.frame + 1); }
+  else if (e.key === 'ArrowLeft'){ screen === 'intro' ? showIntroFrame(introIdx - 1, -1) : setFrame(state.frame - 1); }
+  else if (e.key === 'Enter' && screen === 'intro') goApp();
+  else if (e.key === 'Escape') goHome();
   else if (e.key === 'd' || e.key === 'D') setAdmin(!state.debug);
   else if (!state.debug) return;
   else if (e.key === '+' || e.key === '=') { state.fitScale += 0.02; if (current) updateSkull(current); }
@@ -1706,35 +2255,36 @@ window.addEventListener('keydown', e => {
     def.giroExtra = ((def.giroExtra || 0) + 90) % 360;
     def._tpl = null;
     setFrame(state.frame, state.color);
-    renderGLBThumb(def, document.getElementById('frame-' + def.id));
+    renderGLBThumb(def, $('frame-' + def.id));
   }
 });
 
 /* ---------- Modo ajuste (solo para el personal de la óptica) ----------
-   Teclado: D. Pantalla táctil: 5 toques seguidos sobre el nombre de la óptica. */
+   Teclado: D. Pantalla táctil: 5 toques seguidos sobre el nombre de la óptica o sobre la montura actual. */
 function setAdmin(on){
   state.debug = on;
   debugEl.hidden = !on;
-  document.getElementById('uploadChip').hidden = !on;
+  $('uploadChip').hidden = !on;
   if (!on && state.showOcc){ state.showOcc = false; setOccluderDebug(false); }
   toast(on ? 'Modo ajuste activado' : 'Modo ajuste desactivado', 1800);
 }
 let taps = [];
-document.getElementById('brand').addEventListener('click', () => {
+function tapAdmin(){
   const t = performance.now();
   taps = taps.filter(x => t - x < 2500); taps.push(t);
   if (taps.length >= 5){ taps = []; setAdmin(!state.debug); }
-});
-
+}
+$('brand').addEventListener('click', tapAdmin);
+$('nowPill').addEventListener('click', tapAdmin);
 function modelInfo(){
   const def = FRAMES[state.frame];
   if (!isGLB(def) || !def._info) return '';
   return `\nmodelo: giro ${def._info.rotY}° (R)\nancho ${def._info.anchoMm} mm · lentes ${def._info.lentes}`;
 }
 
-/* ---------- Cargar un modelo propio ---------- */
+/* ---------- Cargar un modelo propio (modo ajuste) ---------- */
 let propios = 0;
-document.getElementById('fileGlb').addEventListener('change', async e => {
+$('fileGlb').addEventListener('change', async e => {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
   if (!file) return;
@@ -1756,35 +2306,16 @@ loadHead();
 loadEnvironment();
 setFrame(0, 0);
 fitCamera();
-
-const statusEl = document.getElementById('status');
-const btnStart = document.getElementById('btnStart');
-btnStart.addEventListener('click', async () => {
-  btnStart.disabled = true;
-  statusEl.className = 'status';
-  try {
-    statusEl.textContent = 'Encendiendo la cámara…';
-    await initCamera();
-    statusEl.textContent = 'Cargando el seguimiento facial…';
-    await initLandmarker();
-    document.getElementById('start').hidden = true;
-    fitCamera();
-  } catch (e){
-    console.error(e);
-    btnStart.disabled = false;
-    statusEl.className = 'status err';
-    const msgs = {
-      NotAllowedError: 'La cámara está bloqueada. Permite el acceso a la cámara en el navegador y vuelve a tocar Empezar.',
-      NotFoundError: 'No se encontró ninguna cámara conectada.',
-      NotReadableError: 'Otra aplicación está usando la cámara. Ciérrala y vuelve a intentar.',
-      Insecure: 'El navegador no permite usar la cámara aquí. Abre el archivo en Chrome o Edge, o publícalo en un sitio con https.',
-    };
-    statusEl.textContent = msgs[e.name] || ('No se pudo iniciar: ' + (e.message || e));
-  }
-});
+fitIntro();
+document.fonts?.ready.then(fitIntro);
+showIntroFrame(0, 1);
+startIntroLoop();
+updateDialPill();
 
 // Acceso para pruebas desde la consola del navegador
-window.__probador = { loadEnvironment, personal, updateLens, buildTintUI, FILT, fPos, fRot, fScale, THREE, renderer, camera, scene, videoMesh, state, anchor, skull, faceOcc, glasses, fit, HEAD, get headOcc(){ return headOcc; }, get current(){ return current; } };
+window.__probador = { loadEnvironment, personal, updateLens, buildTintUI, FILT, fPos, fRot, fScale, THREE, renderer, camera, scene, videoMesh, state, anchor, skull, faceOcc, glasses, fit, HEAD,
+  goApp, goHome, openTab, showIntroFrame, handStep, G, DIAL, videoToScreen,
+  get screen(){ return screen; }, get headOcc(){ return headOcc; }, get current(){ return current; } };
 
 requestAnimationFrame(loop);
 </script>

@@ -1,0 +1,1191 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Probador Virtual Óptica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap">
+<style>
+/* Layout: cámara a pantalla completa + panel de control (abajo en vertical, a la derecha en horizontal). Look oscuro único, tipo kiosco. */
+:root{
+  --ink:#0e1113;
+  --panel:#15191c;
+  --raise:#1d2226;
+  --line:#2a3136;
+  --text:#eef1f2;
+  --muted:#97a1a7;
+  --carey:#d6a15a;
+  --carey-ink:#1c1308;
+  --font-display:'Sora', 'Segoe UI', system-ui, sans-serif;
+  --font-body:'Manrope', 'Segoe UI', system-ui, sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--ink);color:var(--text);font-family:var(--font-body);font-size:15px;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--carey);outline-offset:2px}
+
+#app{height:100dvh;display:grid;grid-template-rows:minmax(0,1fr) auto}
+@media (orientation:landscape) and (min-width:900px){
+  #app{grid-template-columns:minmax(0,1fr) 390px;grid-template-rows:minmax(0,1fr)}
+}
+
+/* ---------- Escenario ---------- */
+.stage{position:relative;overflow:hidden;background:#000;min-height:0}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;transform:scaleX(-1)}
+.topbar{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:calc(14px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 14px max(16px,env(safe-area-inset-left,0px));
+  background:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,0));pointer-events:none}
+.brand{display:flex;flex-direction:column;gap:2px}
+.brand b{font-family:var(--font-display);font-size:17px;letter-spacing:.02em}
+.brand span{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--carey)}
+.top-actions{display:flex;gap:8px;pointer-events:auto}
+.icon-btn{border:1px solid rgba(255,255,255,.18);background:rgba(14,17,19,.55);backdrop-filter:blur(8px);border-radius:999px;padding:9px 14px;font-size:13px;font-weight:600}
+.hint{position:absolute;left:50%;top:22%;transform:translateX(-50%);background:rgba(14,17,19,.72);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.14);
+  padding:10px 18px;border-radius:999px;font-weight:600;font-size:14px;white-space:nowrap}
+.shutter{position:absolute;right:max(18px,env(safe-area-inset-right,0px));bottom:18px;width:68px;height:68px;border-radius:50%;
+  border:3px solid #fff;background:rgba(255,255,255,.18);display:grid;place-items:center}
+.shutter::after{content:"";width:50px;height:50px;border-radius:50%;background:#fff;transition:transform .15s}
+.shutter:active::after{transform:scale(.88)}
+.shutter span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.now{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:20px;background:rgba(14,17,19,.68);backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:10px 14px;display:flex;flex-direction:column;gap:2px;max-width:60%}
+.now b{font-family:var(--font-display);font-size:16px}
+.now span{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .35s}
+.flash.on{opacity:.85;transition:none}
+.debug{position:absolute;left:12px;top:70px;background:rgba(0,0,0,.7);font:12px/1.5 ui-monospace,Consolas,monospace;padding:8px 10px;border-radius:8px;white-space:pre}
+
+/* ---------- Panel ---------- */
+.panel{background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column;gap:18px;overflow-y:auto;max-height:48dvh;
+  padding-block:16px calc(16px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+@media (orientation:landscape) and (min-width:900px){
+  .panel{border-top:0;border-left:1px solid var(--line);max-height:none;padding-top:22px}
+}
+.sec{display:flex;flex-direction:column;gap:10px}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.label{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.value{font-size:13px;color:var(--text);font-variant-numeric:tabular-nums}
+
+.frames{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x proximity}
+@media (orientation:landscape) and (min-width:900px){ .frames{display:grid;grid-template-columns:1fr 1fr;overflow:visible} }
+.frame-card{flex:0 0 140px;scroll-snap-align:start;border:1.5px solid var(--line);background:var(--raise);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:6px;text-align:left}
+.frame-card canvas{width:100%;height:52px;display:block}
+.frame-card b{font-family:var(--font-display);font-size:14px;font-weight:600}
+.frame-card small{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.frame-card[aria-pressed="true"]{border-color:var(--carey);background:#241e17}
+
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.swatch{width:40px;height:40px;border-radius:50%;border:2px solid var(--line);padding:0;position:relative}
+.swatch[aria-pressed="true"]{border-color:var(--carey);box-shadow:0 0 0 3px var(--panel) inset}
+.swatch-name{font-size:13px;color:var(--muted)}
+
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:30px;background:transparent}
+input[type=range]::-webkit-slider-runnable-track{height:10px;border-radius:99px;background:linear-gradient(90deg,#e9eef0,var(--tint-dark,#3a3d40));border:1px solid var(--line)}
+input[type=range]::-moz-range-track{height:10px;border-radius:99px;background:linear-gradient(90deg,#e9eef0,var(--tint-dark,#3a3d40));border:1px solid var(--line)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--carey);border:3px solid var(--panel);margin-top:-9px}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--carey);border:3px solid var(--panel)}
+.range-ends{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:-4px}
+
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1.5px solid var(--line);background:var(--raise);border-radius:999px;padding:9px 14px;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:8px}
+.chip[aria-pressed="true"]{border-color:var(--carey);color:var(--carey)}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+.sun{background:var(--carey);color:var(--carey-ink);border-color:var(--carey)}
+.sun[aria-pressed="true"]{background:var(--raise);color:var(--carey)}
+
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1.5px solid var(--line);background:var(--raise);border-radius:14px;padding:12px 14px;text-align:left;width:100%}
+.toggle div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.toggle b{font-size:14px}
+.toggle small{font-size:12px;color:var(--muted)}
+.switch{flex:0 0 42px;height:24px;border-radius:99px;background:var(--line);position:relative;transition:background .2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s}
+.toggle[aria-pressed="true"] .switch{background:var(--carey)}
+.toggle[aria-pressed="true"] .switch::after{transform:translateX(18px)}
+.toggles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media (max-width:420px){ .toggles{grid-template-columns:1fr} }
+
+/* ---------- Pantalla de inicio ---------- */
+.start{position:fixed;inset:0;z-index:20;background:radial-gradient(120% 80% at 50% 20%,#1b2024,var(--ink));display:grid;place-items:center;
+  padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.start-inner{max-width:520px;display:flex;flex-direction:column;align-items:center;gap:22px;text-align:center}
+.start svg{width:min(320px,80vw);height:auto}
+.start h1{font-family:var(--font-display);font-size:clamp(30px,6vw,46px);line-height:1.08;margin:0;text-wrap:balance}
+.start p{margin:0;color:var(--muted);line-height:1.55;max-width:42ch}
+.cta{background:var(--carey);color:var(--carey-ink);border:0;border-radius:999px;padding:16px 34px;font-family:var(--font-display);font-size:18px;font-weight:600}
+.cta:disabled{opacity:.6;cursor:progress}
+.status{font-size:14px;color:var(--muted);min-height:1.4em}
+.status.err{color:#ff9b8a;max-width:46ch;line-height:1.5}
+.measure{font-variant-numeric:tabular-nums;font-size:12px;letter-spacing:.12em;color:var(--carey)}
+
+/* ---------- Foto ---------- */
+.modal{position:fixed;inset:0;z-index:30;background:rgba(5,7,8,.86);display:grid;place-items:center;
+  padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.modal-card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:14px;max-width:min(560px,100%);max-height:100%}
+.modal-card img{border-radius:10px;max-height:70dvh;object-fit:contain;background:#000}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.btn{border:1.5px solid var(--line);background:var(--raise);border-radius:999px;padding:11px 18px;font-weight:600;text-decoration:none;color:var(--text)}
+.btn.primary{background:var(--carey);border-color:var(--carey);color:var(--carey-ink)}
+
+.upload{align-self:flex-start;cursor:pointer;border-style:dashed;color:var(--muted)}
+.upload:hover{color:var(--text)}
+.frame-card img{width:100%;height:52px;object-fit:contain;display:block}
+.frame-card .ph{height:52px;display:grid;place-items:center;font-size:11px;color:var(--muted)}
+.credits{margin:0;font-size:11px;line-height:1.5;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;
+  background:var(--raise);border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:14px;max-width:min(460px,calc(100vw - 32px))}
+
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+
+<div id="app">
+  <section class="stage" id="stage">
+    <canvas id="gl"></canvas>
+    <div class="topbar">
+      <div class="brand"><span>Probador virtual</span><b>Tu Óptica</b></div>
+      <div class="top-actions">
+        <button class="icon-btn" id="btnFull" type="button">Pantalla completa</button>
+      </div>
+    </div>
+    <div class="hint" id="hint" hidden>Mira de frente a la cámara</div>
+    <div class="now" id="now"><b id="nowName">—</b><span id="nowInfo">—</span></div>
+    <button class="shutter" id="btnPhoto" type="button" aria-label="Tomar foto"><span>Tomar foto</span></button>
+    <div class="flash" id="flash"></div>
+    <div class="debug" id="debug" hidden></div>
+  </section>
+
+  <aside class="panel" aria-label="Opciones">
+    <div class="sec">
+      <div class="sec-head"><span class="label">Monturas</span><span class="value" id="frameCount"></span></div>
+      <div class="frames" id="frames"></div>
+      <label class="chip upload" for="fileGlb">Probar un modelo propio (.glb)</label>
+      <input type="file" id="fileGlb" accept=".glb,model/gltf-binary" hidden>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><span class="label">Color de montura</span><span class="swatch-name" id="colorName"></span></div>
+      <div class="swatches" id="swatches"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><span class="label">Transitions</span><span class="value" id="tintValue">Interior · 0%</span></div>
+      <input type="range" id="tint" min="0" max="100" value="0" aria-label="Oscurecimiento del lente">
+      <div class="range-ends"><span>Interior</span><span>Sol directo</span></div>
+      <div class="row">
+        <button class="chip sun" id="btnSun" type="button" aria-pressed="false">Salir al sol</button>
+        <span id="tintChips" class="row"></span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <span class="label">Tratamientos</span>
+      <div class="toggles">
+        <button class="toggle" id="tgAR" type="button" aria-pressed="false">
+          <div><b>Antirreflejo</b><small>Quita los brillos del lente</small></div><span class="switch"></span>
+        </button>
+        <button class="toggle" id="tgBlue" type="button" aria-pressed="false">
+          <div><b>Filtro luz azul</b><small>Para pantallas y celular</small></div><span class="switch"></span>
+        </button>
+      </div>
+    </div>
+
+    <p class="credits">Modelos 3D de prueba (Sketchfab, licencia CC BY 4.0, adaptados): «Anteojos» de Orking, «Glasses» de AlbertVictory y «Glasses» de C.U.V.</p>
+  </aside>
+</div>
+
+<div class="start" id="start">
+  <div class="start-inner">
+    <svg viewBox="0 0 320 120" aria-hidden="true">
+      <g fill="none" stroke="#d6a15a" stroke-width="5" stroke-linejoin="round">
+        <path d="M30 40 Q30 28 44 28 H128 Q140 28 139 42 L134 74 Q130 94 108 94 H62 Q38 94 34 76 Z"/>
+        <path d="M290 40 Q290 28 276 28 H192 Q180 28 181 42 L186 74 Q190 94 212 94 H258 Q282 94 286 76 Z"/>
+        <path d="M139 44 Q160 32 181 44"/>
+      </g>
+      <text x="160" y="116" text-anchor="middle" fill="#97a1a7" font-size="11" letter-spacing="2" font-family="Manrope, sans-serif">52 □ 18 · 145</text>
+    </svg>
+    <h1>Pruébate tus lentes antes de llevarlos</h1>
+    <p>Cambia de montura, mira cómo se oscurece un lente Transitions al sol y compara tratamientos, todo en tiempo real con la cámara.</p>
+    <button class="cta" id="btnStart" type="button">Empezar</button>
+    <div class="status" id="status"></div>
+  </div>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-card">
+    <img id="photoImg" alt="Foto con la montura puesta">
+    <div class="modal-actions">
+      <button class="btn" id="btnClose" type="button">Cerrar</button>
+      <a class="btn primary" id="btnSave" download="probador.png" href="#">Guardar foto</a>
+    </div>
+  </div>
+</div>
+
+<!--MODELOS_EMBEBIDOS-->
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+  // Si los módulos no cargan (sin internet en la primera carga), avisar.
+  setTimeout(function(){
+    if(!window.__probadorListo){
+      var s=document.getElementById('status');
+      s.className='status err';
+      s.textContent='No se pudieron cargar las librerías. Esta versión de prueba necesita internet la primera vez que se abre.';
+    }
+  },15000);
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FaceLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
+
+window.__probadorListo = true;
+
+/* =========================================================
+   CATÁLOGO (en la versión final viene de catalogo.json)
+   Medidas en notación óptica: ancho lente □ puente · largo patilla (mm)
+   ========================================================= */
+const FRAMES = [
+  // ---- Modelos 3D reales (GLB). "anchoMm" fija el ancho frontal real de la montura.
+  { id:'redonda', nombre:'Redonda clásica', estilo:'Metal', ref:'OPT-204', medidas:'47□22 · 145',
+    modelo:'monturas/redonda-metal.glb', anchoMm:130,
+    colores:[{n:'Plata', muestra:'#c9ced2'},{n:'Dorado', hex:'#e8bd6a', muestra:'#d4a64f'},{n:'Negro mate', hex:'#3a3a3a', rough:0.65, muestra:'#2b2b2b'}] },
+  { id:'rectangular', nombre:'Rectangular', estilo:'Acetato', ref:'OPT-118', medidas:'54□17 · 145',
+    modelo:'monturas/rectangular-acetato.glb', anchoMm:138,
+    colores:[{n:'Negro mate', muestra:'#1a1a1a'},{n:'Negro brillante', hex:'#0e0e0e', rough:0.22, muestra:'#0e0e0e'},
+             {n:'Azul noche', hex:'#1d2c4f', rough:0.3, muestra:'#1d2c4f'},{n:'Vino', hex:'#5c1622', rough:0.3, muestra:'#5c1622'}] },
+  { id:'semi', nombre:'Semi al aire', estilo:'Metal · nylon', ref:'OPT-415', medidas:'53□18 · 140',
+    modelo:'monturas/semi-al-aire.glb', anchoMm:135,
+    colores:[{n:'Grafito y azul', muestra:'#2b2f36'}] },
+  // ---- Monturas generadas por código (marcador de posición)
+  { id:'wayfarer', nombre:'Wayfarer', estilo:'Acetato', ref:'OPT-101', medidas:'52□18 · 145',
+    shape:'wayfarer', metal:false, rim:0.042, brow:0.7, depth:0.032, bridge:0.12, offY:0.01,
+    colores:[{n:'Negro brillante',hex:'#151515'},{n:'Carey',hex:'carey'},{n:'Cristal',hex:'#dfe4e6',clear:true}] },
+  { id:'gatita', nombre:'Ojo de gato', estilo:'Acetato', ref:'OPT-122', medidas:'53□17 · 140',
+    shape:'catEye', metal:false, rim:0.038, brow:0.9, depth:0.03, bridge:0.12, offY:0.012,
+    colores:[{n:'Carey',hex:'carey'},{n:'Vino',hex:'#6b1d2a'},{n:'Negro brillante',hex:'#151515'}] },
+  { id:'aviador', nombre:'Aviador', estilo:'Metal doble puente', ref:'OPT-310', medidas:'58□14 · 140',
+    shape:'aviador', metal:true, rim:0.011, depth:0.012, bridge:0.13, offY:-0.005, doubleBridge:true,
+    colores:[{n:'Dorado',hex:'#c9a45c'},{n:'Gunmetal',hex:'#5a5f63'},{n:'Plata',hex:'#c9ced2'}] },
+];
+
+const TINTS = {
+  gris:  { n:'Gris',       hex:'#2f3336' },
+  cafe:  { n:'Café',       hex:'#5a3a1f' },
+  verde: { n:'Verde G-15', hex:'#36452f' },
+};
+
+const state = {
+  frame: 0, color: 0,
+  tint: 0, tintTarget: 0, sun: false, tintColor: 'gris',
+  ar: false, blue: false,
+  fitScale: 1.0, fitOffY: 0.0, debug: false,
+};
+
+/* =========================================================
+   GEOMETRÍA DE LAS MONTURAS
+   Unidades del modelo: 1.0 ≈ ancho frontal de una montura (~14 cm).
+   Convención del lente derecho: +x = lado de la patilla, -x = lado de la nariz.
+   ========================================================= */
+const N = 120;
+function superellipse(a, b, n, warp){
+  const pts = [];
+  for (let i = 0; i < N; i++){
+    const t = i / N * Math.PI * 2;
+    const c = Math.cos(t), s = Math.sin(t);
+    let x = a * Math.sign(c) * Math.pow(Math.abs(c), 2 / n);
+    let y = b * Math.sign(s) * Math.pow(Math.abs(s), 2 / n);
+    if (warp) [x, y] = warp(x, y);
+    pts.push([x, y]);
+  }
+  return pts;
+}
+const SHAPES = {
+  redonda:     () => superellipse(0.165, 0.165, 2),
+  rectangular: () => superellipse(0.19, 0.105, 4.5),
+  wayfarer:    () => superellipse(0.19, 0.14, 3.2, (x, y) => [x * (1 + 0.12 * y / 0.14), y + 0.02 * (x / 0.19)]),
+  catEye:      () => superellipse(0.19, 0.13, 2.8, (x, y) => {
+                   const k = Math.max(0, x / 0.19), up = Math.max(0, y / 0.13);
+                   return [x * (1 + 0.05 * up), y + 0.085 * k * k * up];
+                 }),
+  aviador:     () => superellipse(0.2, 0.16, 2.2, (x, y) => {
+                   if (y >= 0) return [x * (1 + 0.03 * y / 0.16), y * 0.78];
+                   const d = -y / 0.16;
+                   return [x * (1 - 0.12 * d) - 0.05 * d * d, y * 1.18];
+                 }),
+};
+// Desplaza el contorno hacia afuera; "brow" engrosa la parte superior (ceja de acetato).
+function offsetPts(pts, d, brow){
+  const n = pts.length;
+  return pts.map((p, i) => {
+    const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
+    let tx = b[0] - a[0], ty = b[1] - a[1];
+    const L = Math.hypot(tx, ty) || 1; tx /= L; ty /= L;
+    const nx = ty, ny = -tx;
+    const dd = d * (1 + brow * Math.max(0, ny));
+    return [p[0] + nx * dd, p[1] + ny * dd];
+  });
+}
+function framePaths(def){
+  const inner = SHAPES[def.shape]();
+  const outer = offsetPts(inner, def.rim, def.brow || 0);
+  let minX = Infinity, maxY = -Infinity, minY = Infinity, oMaxX = -Infinity, oMaxY = -Infinity;
+  for (const [x, y] of inner){ minX = Math.min(minX, x); maxY = Math.max(maxY, y); minY = Math.min(minY, y); }
+  for (const [x, y] of outer){ oMaxX = Math.max(oMaxX, x); oMaxY = Math.max(oMaxY, y); }
+  const offX = def.bridge / 2 - minX;
+  const R = p => [p[0] + offX, p[1]];
+  const Lf = p => [-(p[0] + offX), p[1]];
+  return {
+    rInner: inner.map(R), rOuter: outer.map(R),
+    lInner: inner.map(Lf), lOuter: outer.map(Lf),
+    hingeX: oMaxX + offX, hingeY: maxY * 0.5, topY: oMaxY, minY,
+    halfWidth: oMaxX + offX,
+  };
+}
+
+/* ---------- Texturas ---------- */
+function seeded(seed){ return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+let _carey;
+function careyTexture(){
+  if (_carey) return _carey;
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d'); const r = seeded(7);
+  g.fillStyle = '#4a2810'; g.fillRect(0, 0, 256, 256);
+  const cols = ['rgba(201,138,61,.55)', 'rgba(150,84,30,.6)', 'rgba(30,14,5,.7)', 'rgba(222,170,90,.35)'];
+  for (let i = 0; i < 140; i++){
+    const x = r() * 256, y = r() * 256, rad = 6 + r() * 30;
+    const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+    grd.addColorStop(0, cols[i % cols.length]); grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grd; g.beginPath(); g.ellipse(x, y, rad, rad * (0.4 + r() * 0.6), r() * Math.PI, 0, Math.PI * 2); g.fill();
+  }
+  _carey = new THREE.CanvasTexture(c);
+  _carey.colorSpace = THREE.SRGBColorSpace;
+  _carey.wrapS = _carey.wrapT = THREE.RepeatWrapping;
+  _carey.repeat.set(3, 3);
+  return _carey;
+}
+let _glare;
+function glareTexture(){
+  if (_glare) return _glare;
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.translate(128, 128); g.rotate(-0.6); g.translate(-128, -128);
+  const band = (x, w, a) => {
+    const grd = g.createLinearGradient(x - w, 0, x + w, 0);
+    grd.addColorStop(0, 'rgba(255,255,255,0)'); grd.addColorStop(0.5, `rgba(255,255,255,${a})`); grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd; g.fillRect(x - w, -100, w * 2, 460);
+  };
+  band(70, 26, 0.9); band(118, 10, 0.6); band(190, 40, 0.25);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  const spot = g.createRadialGradient(70, 60, 0, 70, 60, 40);
+  spot.addColorStop(0, 'rgba(255,255,255,.8)'); spot.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = spot; g.fillRect(0, 0, 256, 256);
+  _glare = new THREE.CanvasTexture(c);
+  return _glare;
+}
+
+/* ---------- Construcción 3D ---------- */
+const v2 = pts => pts.map(([x, y]) => new THREE.Vector2(x, y));
+function lensGeometry(pts){
+  const geo = new THREE.ShapeGeometry(new THREE.Shape(v2(pts)));
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox, uv = geo.attributes.uv, pos = geo.attributes.position;
+  for (let i = 0; i < uv.count; i++){
+    uv.setXY(i, (pos.getX(i) - bb.min.x) / (bb.max.x - bb.min.x), (pos.getY(i) - bb.min.y) / (bb.max.y - bb.min.y));
+  }
+  uv.needsUpdate = true;
+  return geo;
+}
+function frameMaterial(def, col){
+  if (col.hex === 'carey') return new THREE.MeshPhysicalMaterial({ map: careyTexture(), roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.1 });
+  if (col.clear) return new THREE.MeshPhysicalMaterial({ color: col.hex, roughness: 0.12, clearcoat: 1, transparent: true, opacity: 0.5, depthWrite: false });
+  return new THREE.MeshPhysicalMaterial({
+    color: col.hex,
+    metalness: def.metal ? 0.95 : 0.05,
+    roughness: col.matte ? 0.6 : (def.metal ? 0.26 : 0.28),
+    clearcoat: def.metal || col.matte ? 0 : 0.9, clearcoatRoughness: 0.12,
+  });
+}
+let lensMats = [], glareMats = [];
+function buildFrame(def, col){
+  const group = new THREE.Group();
+  const P = framePaths(def);
+  const mat = frameMaterial(def, col);
+  const half = def.depth / 2;
+
+  // Aros
+  for (const [outer, inner] of [[P.rOuter, P.rInner], [P.lOuter, P.lInner]]){
+    const shape = new THREE.Shape(v2(outer));
+    shape.holes.push(new THREE.Path(v2(inner)));
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: def.depth, curveSegments: 1, steps: 1,
+      bevelEnabled: true, bevelThickness: def.metal ? 0.003 : 0.006, bevelSize: def.metal ? 0.002 : 0.005, bevelSegments: 2,
+    });
+    geo.translate(0, 0, -half);
+    group.add(new THREE.Mesh(geo, mat));
+  }
+
+  // Puente
+  const by = P.topY * (def.metal ? 0.42 : 0.5);
+  const bx = def.bridge / 2 + (def.metal ? 0.004 : 0.02);
+  const bridge = new THREE.QuadraticBezierCurve3(
+    new THREE.Vector3(bx, by, 0), new THREE.Vector3(0, by + (def.metal ? 0.03 : 0.012), 0), new THREE.Vector3(-bx, by, 0));
+  group.add(new THREE.Mesh(new THREE.TubeGeometry(bridge, 24, def.metal ? 0.007 : 0.024, 10), mat));
+  if (def.doubleBridge){
+    const tx = def.bridge / 2 + 0.07, ty = P.topY - 0.004;
+    const top = new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(tx, ty, 0), new THREE.Vector3(0, ty + 0.012, 0), new THREE.Vector3(-tx, ty, 0));
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(top, 24, 0.006, 8), mat));
+  }
+
+  // Bisagras y patillas
+  for (const s of [1, -1]){
+    const hx = s * P.hingeX, hy = P.hingeY;
+    const end = new THREE.Mesh(new THREE.BoxGeometry(0.04, def.metal ? 0.026 : 0.05, def.depth + 0.02), mat);
+    end.position.set(hx - s * 0.014, hy, -0.01);
+    group.add(end);
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(hx, hy, -half - 0.01),
+      new THREE.Vector3(hx + s * 0.012, hy, -0.35),
+      new THREE.Vector3(hx + s * 0.02, hy - 0.01, -0.78),
+      new THREE.Vector3(hx + s * 0.012, hy - 0.09, -0.97),
+    ]);
+    const temple = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, def.metal ? 0.006 : 0.014, 8), mat);
+    if (!def.metal) temple.scale.set(1, 1, 1);
+    group.add(temple);
+  }
+
+  // Plaquetas (monturas metálicas)
+  if (def.metal){
+    const padMat = new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.2, transparent: true, opacity: 0.45, depthWrite: false });
+    for (const s of [1, -1]){
+      const pad = new THREE.Mesh(new THREE.SphereGeometry(0.02, 16, 12), padMat);
+      pad.scale.set(0.55, 1, 0.4);
+      pad.position.set(s * (def.bridge / 2 + 0.02), P.minY * 0.25, -0.035);
+      group.add(pad);
+    }
+  }
+
+  // Lentes + capa de reflejo
+  lensMats = []; glareMats = [];
+  for (const pts of [P.rInner, P.lInner]){
+    const geo = lensGeometry(pts);
+    const lm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.06, depthWrite: false, toneMapped: false });
+    const lens = new THREE.Mesh(geo, lm); lens.renderOrder = 2; group.add(lens);
+    const gm = new THREE.MeshBasicMaterial({ map: glareTexture(), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+    const glare = new THREE.Mesh(geo, gm); glare.position.z = 0.003; glare.renderOrder = 3; group.add(glare);
+    lensMats.push(lm); glareMats.push(gm);
+  }
+  return group;
+}
+function disposeGroup(g){
+  const shared = g.userData.compartida;
+  g.traverse(o => {
+    if (o.geometry && !shared) o.geometry.dispose();
+    if (o.material && o.material.map !== _carey && o.material.map !== _glare) o.material.dispose?.();
+  });
+}
+
+/* ---------- Estado visual del lente ---------- */
+const _white = new THREE.Color('#ffffff'), _yellow = new THREE.Color('#fff2c2');
+function updateLens(){
+  const t = state.tint;
+  const base = state.blue ? _yellow : _white;
+  const col = base.clone().lerp(new THREE.Color(TINTS[state.tintColor].hex), t);
+  const op = 0.05 + (state.blue ? 0.07 : 0) + t * 0.76;
+  for (const m of lensMats){ m.color.copy(col); m.opacity = op; }
+  let gcol = '#ffffff', gop = 0.55;
+  if (state.ar){ gcol = state.blue ? '#9aa8ff' : '#8dffa6'; gop = 0.09; }
+  else if (state.blue){ gcol = '#c2ccff'; gop = 0.55; }
+  for (const m of glareMats){ m.color.set(gcol); m.opacity = gop * (m.userData.k || 1); }
+  const pct = Math.round(t * 100);
+  document.getElementById('tintValue').textContent =
+    (pct < 8 ? 'Interior' : pct < 45 ? 'Nublado' : pct < 80 ? 'Sol' : 'Sol directo') + ' · ' + pct + '%';
+  const slider = document.getElementById('tint');
+  if (document.activeElement !== slider) slider.value = pct;
+}
+
+/* =========================================================
+   ESCENA
+   Espacio de la escena = píxeles del video. Cámara ortográfica.
+   El canvas se voltea con CSS para el efecto espejo.
+   ========================================================= */
+const canvas = document.getElementById('gl');
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+const dir = new THREE.DirectionalLight(0xffffff, 1.4); dir.position.set(0.4, 1, 1.2); scene.add(dir);
+
+const camera = new THREE.OrthographicCamera(0, 1, 1, 0, 0.1, 30000);
+camera.position.set(0, 0, 12000);
+
+const video = document.createElement('video');
+video.playsInline = true; video.muted = true; video.autoplay = true;
+video.setAttribute('playsinline', '');
+video.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+document.body.append(video); // Safari en iPad/iPhone necesita el video dentro de la página
+const videoTex = new THREE.VideoTexture(video);
+videoTex.colorSpace = THREE.SRGBColorSpace;
+const videoMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ map: videoTex, depthTest: false, depthWrite: false, toneMapped: false }));
+videoMesh.renderOrder = -2;
+scene.add(videoMesh);
+
+const anchor = new THREE.Group(); anchor.visible = false; scene.add(anchor);
+const fitGroup = new THREE.Group(); anchor.add(fitGroup);
+// Cabeza invisible: tapa las patillas cuando la cabeza gira.
+const occluder = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), new THREE.MeshBasicMaterial({ colorWrite: false }));
+occluder.scale.set(0.46, 0.62, 0.62); occluder.position.set(0, -0.1, -0.68); occluder.renderOrder = -1;
+anchor.add(occluder);
+
+// Puntos de depuración (tecla D)
+const dbgGeo = new THREE.BufferGeometry();
+dbgGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(478 * 3), 3));
+const dbgPts = new THREE.Points(dbgGeo, new THREE.PointsMaterial({ color: '#00e5ff', size: 3, depthTest: false, sizeAttenuation: false }));
+dbgPts.visible = false; dbgPts.renderOrder = 10; scene.add(dbgPts);
+
+let vw = 0, vh = 0;
+function syncVideo(){
+  if (!video.videoWidth) return;
+  if (video.videoWidth !== vw || video.videoHeight !== vh){
+    vw = video.videoWidth; vh = video.videoHeight;
+    videoMesh.scale.set(vw, vh, 1);
+    videoMesh.position.set(vw / 2, vh / 2, -9000);
+    fitCamera();
+  }
+}
+function fitCamera(){
+  const cw = stage.clientWidth, ch = stage.clientHeight;
+  if (!cw || !ch) return;
+  renderer.setSize(cw, ch, false);
+  if (!vw) return;
+  const A = cw / ch, V = vw / vh;
+  let w, h;
+  if (A > V){ w = vw; h = vw / A; } else { h = vh; w = vh * A; }
+  camera.left = vw / 2 - w / 2; camera.right = vw / 2 + w / 2;
+  camera.top = vh / 2 + h / 2; camera.bottom = vh / 2 - h / 2;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(fitCamera).observe(stage);
+
+/* ---------- Montura activa ---------- */
+let current = null, frameToken = 0;
+async function setFrame(i, colorIdx = 0){
+  state.frame = (i + FRAMES.length) % FRAMES.length;
+  state.color = colorIdx;
+  const def = FRAMES[state.frame];
+  const tok = ++frameToken;
+  renderFrameUI();
+  let obj;
+  if (isGLB(def)){
+    try {
+      const tpl = await loadTemplate(def);
+      if (tok !== frameToken) return;
+      obj = instantiateGLB(def, tpl, def.colores[state.color]);
+    } catch (e){
+      console.error(e);
+      if (tok === frameToken) toast('No se pudo cargar «' + def.nombre + '». Revisa que el archivo sea un .glb válido.');
+      return;
+    }
+  } else {
+    obj = buildFrame(def, def.colores[state.color]);
+  }
+  if (current){ fitGroup.remove(current); disposeGroup(current); }
+  current = obj;
+  fitGroup.add(current);
+  fitGroup.position.y = def.offY || 0;
+  updateLens();
+}
+
+/* =========================================================
+   MODELOS GLB
+   Convención esperada: Y arriba, frente hacia +Z, patillas hacia -Z,
+   lentes en objetos llamados "lente". Si el modelo viene girado,
+   se orienta solo (y con la tecla R en modo ajuste se gira 90°).
+   Unidades de la app: 1.0 = 140 mm.
+   ========================================================= */
+const gltfLoader = new GLTFLoader();
+const isGLB = def => !!(def.modelo || def._buf);
+const LENS_RE = /^(lente|lentes|lens|lenses|glass|cristal|cristales|vidrio|mica)(?![a-z])/i;
+
+function b64ToBuffer(b64){
+  const bin = atob(b64), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+async function getBuffer(def){
+  if (def._buf) return def._buf;
+  const emb = window.MODELOS_EMBEBIDOS && window.MODELOS_EMBEBIDOS[def.modelo];
+  if (emb) return (def._buf = b64ToBuffer(emb));
+  const r = await fetch(def.modelo);
+  if (!r.ok) throw new Error('No se encontró ' + def.modelo);
+  return (def._buf = await r.arrayBuffer());
+}
+function loadTemplate(def){
+  if (!def._tpl) def._tpl = (async () => {
+    const buf = await getBuffer(def);
+    const gltf = await new Promise((res, rej) => gltfLoader.parse(buf.slice(0), '', res, rej));
+    const tpl = prepareModel(gltf.scene, def);
+    def._info = tpl.info;
+    return tpl;
+  })().catch(e => { def._tpl = null; throw e; });
+  return def._tpl;
+}
+
+// <normalizar>
+function isLensMesh(m){
+  const mats = [].concat(m.material);
+  if ([m.name, m.parent && m.parent.name, m.parent && m.parent.parent && m.parent.parent.name].some(n => n && LENS_RE.test(n))) return true;
+  if (mats.some(mt => LENS_RE.test(mt.name || ''))) return true;
+  return mats.every(mt => mt.transparent && mt.opacity < 0.5 && !mt.map);
+}
+function samplePoints(meshes, max = 40000){
+  let total = 0; for (const m of meshes) total += m.geometry.attributes.position.count;
+  const step = Math.max(1, Math.ceil(total / max)), pts = [];
+  for (const m of meshes){
+    const pos = m.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i += step) pts.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld));
+  }
+  return pts;
+}
+const boxOf = pts => new THREE.Box3().setFromPoints(pts);
+const meanOf = pts => pts.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / Math.max(1, pts.length));
+
+function prepareModel(root, def){
+  const junk = []; root.traverse(o => { if (o.isLight || o.isCamera) junk.push(o); });
+  junk.forEach(o => o.parent && o.parent.remove(o));
+  root.position.set(0, 0, 0); root.quaternion.identity(); root.scale.set(1, 1, 1);
+  const pivot = new THREE.Group(); pivot.add(root);
+  pivot.updateMatrixWorld(true);
+
+  const lens = [], frame = [];
+  root.traverse(o => { if (o.isMesh) (isLensMesh(o) ? lens : frame).push(o); });
+  if (!frame.length) throw new Error('El modelo no tiene montura');
+  let fp = samplePoints(frame), lp = samplePoints(lens);
+  const bb = boxOf(fp);
+
+  // Orientación: el frente es el extremo donde están los lentes (o donde se concentra la geometría)
+  let rotY = 0;
+  if (def.autoOrientar !== false){
+    const ex = bb.max.x - bb.min.x, ez = bb.max.z - bb.min.z;
+    let axis, front;
+    if (lp.length){
+      const lc = meanOf(lp), c = bb.getCenter(new THREE.Vector3());
+      const dx = (lc.x - c.x) / ex, dz = (lc.z - c.z) / ez;
+      if (Math.abs(dx) > Math.abs(dz)){ axis = 'x'; front = Math.sign(dx); } else { axis = 'z'; front = Math.sign(dz); }
+    } else {
+      const asym = (k, lo, hi) => { const e = hi - lo; let a = 0, b = 0; for (const p of fp){ if (p[k] - lo < 0.15 * e) a++; if (hi - p[k] < 0.15 * e) b++; } return (b - a) / fp.length; };
+      const ax = asym('x', bb.min.x, bb.max.x), az = asym('z', bb.min.z, bb.max.z);
+      if (Math.abs(ax) > Math.abs(az)){ axis = 'x'; front = Math.sign(ax) || 1; } else { axis = 'z'; front = Math.sign(az) || 1; }
+    }
+    rotY = axis === 'z' ? (front > 0 ? 0 : Math.PI) : (front > 0 ? -Math.PI / 2 : Math.PI / 2);
+  }
+  rotY += THREE.MathUtils.degToRad(def.giroExtra || 0);
+  pivot.rotation.y = rotY;
+  const R = new THREE.Matrix4().makeRotationY(rotY);
+  fp = fp.map(p => p.applyMatrix4(R)); lp = lp.map(p => p.applyMatrix4(R));
+
+  // Escala: ancho frontal real → unidades de la app (1 = 140 mm)
+  const bb2 = boxOf(fp);
+  const width = bb2.max.x - bb2.min.x;
+  const anchoM = def.anchoMm ? def.anchoMm / 1000 : (width > 0.11 && width < 0.17 ? width : 0.14);
+  const k = anchoM / width / 0.14;
+
+  // Centro: el centro de los lentes queda a la altura de los ojos y su plano en z = 0
+  const cx = (bb2.min.x + bb2.max.x) / 2;
+  let cy, cz;
+  if (lp.length){ const lb = boxOf(lp); cy = (lb.min.y + lb.max.y) / 2; cz = meanOf(lp).z; }
+  else {
+    const depth = bb2.max.z - bb2.min.z;
+    const fr = fp.filter(p => bb2.max.z - p.z < 0.12 * depth), fb = boxOf(fr);
+    cy = (fb.min.y + fb.max.y) / 2; cz = (fb.min.z + fb.max.z) / 2;
+  }
+  pivot.position.set(-cx, -cy, -cz);
+  const holder = new THREE.Group();
+  holder.add(pivot);
+  holder.scale.setScalar(k);
+  holder.updateMatrixWorld(true);
+
+  // Lentes: marcar y preparar una copia con coordenadas UV planas para el reflejo
+  const inv = holder.matrixWorld.clone().invert();
+  const side = { r: new THREE.Box3(), l: new THREE.Box3() };
+  const v = new THREE.Vector3();
+  const local = m => { const M = inv.clone().multiply(m.matrixWorld); return M; };
+  for (const m of lens){
+    const M = local(m), pos = m.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++){ v.fromBufferAttribute(pos, i).applyMatrix4(M); (v.x >= 0 ? side.r : side.l).expandByPoint(v); }
+  }
+  for (const m of lens){
+    m.userData.esLente = true;
+    const M = local(m), pos = m.geometry.attributes.position;
+    const uv = new Float32Array(pos.count * 2);
+    for (let i = 0; i < pos.count; i++){
+      v.fromBufferAttribute(pos, i).applyMatrix4(M);
+      const b = v.x >= 0 ? side.r : side.l;
+      uv[i * 2] = (v.x - b.min.x) / Math.max(1e-6, b.max.x - b.min.x);
+      uv[i * 2 + 1] = (v.y - b.min.y) / Math.max(1e-6, b.max.y - b.min.y);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', pos);
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    if (m.geometry.index) g.setIndex(m.geometry.index);
+    const glare = new THREE.Mesh(g, m.material);
+    glare.userData.esReflejo = true;
+    m.add(glare);
+  }
+
+  // Material principal de la montura (el que cubre más triángulos): es el que cambia de color
+  const count = new Map();
+  for (const m of frame){
+    const n = m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count;
+    for (const mt of [].concat(m.material)) count.set(mt.uuid, (count.get(mt.uuid) || 0) + n);
+  }
+  const mainUuid = [...count.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  return { holder, mainUuid, info: { rotY: Math.round(THREE.MathUtils.radToDeg(rotY)), anchoMm: Math.round(anchoM * 1000), lentes: lens.length } };
+}
+// </normalizar>
+
+function instantiateGLB(def, tpl, col){
+  const obj = tpl.holder.clone(true);
+  obj.userData.compartida = true;
+  lensMats = []; glareMats = [];
+  const clones = new Map();
+  const cloneMat = mt => {
+    if (!clones.has(mt.uuid)){
+      const c = mt.clone();
+      if (mt.uuid === tpl.mainUuid && col){
+        if (col.hex){ c.color.set(col.hex); }
+        if (col.rough != null) c.roughness = col.rough;
+        if (col.metal != null) c.metalness = col.metal;
+        c.needsUpdate = true;
+      }
+      clones.set(mt.uuid, c);
+    }
+    return clones.get(mt.uuid);
+  };
+  obj.traverse(o => {
+    if (!o.isMesh) return;
+    if (o.userData.esReflejo){
+      const gm = new THREE.MeshBasicMaterial({ map: glareTexture(), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+      gm.userData.k = 0.45; // los lentes 3D tienen cara frontal y trasera: el reflejo se ve doble
+      o.material = gm; o.renderOrder = 3; glareMats.push(gm);
+    } else if (o.userData.esLente){
+      const lm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.06, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+      o.material = lm; o.renderOrder = 2; lensMats.push(lm);
+    } else {
+      o.material = Array.isArray(o.material) ? o.material.map(cloneMat) : cloneMat(o.material);
+    }
+  });
+  return obj;
+}
+
+/* ---------- Miniaturas de los modelos GLB ---------- */
+let thumbR = null, thumbScene, thumbCam;
+function thumbRenderer(){
+  if (thumbR) return thumbR;
+  thumbR = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  thumbR.setSize(480, 180, false);
+  thumbR.toneMapping = THREE.ACESFilmicToneMapping;
+  thumbScene = new THREE.Scene();
+  thumbScene.environment = new THREE.PMREMGenerator(thumbR).fromScene(new RoomEnvironment(), 0.04).texture;
+  thumbScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const d = new THREE.DirectionalLight(0xffffff, 1.6); d.position.set(0.3, 1, 1.5); thumbScene.add(d);
+  thumbCam = new THREE.OrthographicCamera(-0.56, 0.56, 0.21, -0.21, 0.01, 10);
+  thumbCam.position.set(0, 0.02, 3);
+  return thumbR;
+}
+async function renderGLBThumb(def, card){
+  try {
+    const tpl = await loadTemplate(def);
+    const r = thumbRenderer();
+    const saveL = lensMats, saveG = glareMats;
+    const obj = instantiateGLB(def, tpl, def.colores[0]);
+    lensMats = saveL; glareMats = saveG;
+    obj.rotation.y = 0.32;
+    thumbScene.add(obj);
+    r.setClearColor(0x000000, 0);
+    r.render(thumbScene, thumbCam);
+    thumbScene.remove(obj); disposeGroup(obj);
+    const img = new Image(); img.alt = ''; img.src = r.domElement.toDataURL('image/png');
+    card.querySelector('.ph, canvas, img')?.replaceWith(img);
+  } catch (e){
+    console.error(e);
+    const ph = card.querySelector('.ph'); if (ph) ph.textContent = 'Error al cargar';
+  }
+}
+
+function toast(msg, ms = 5000){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, ms);
+}
+
+/* =========================================================
+   SEGUIMIENTO FACIAL
+   ========================================================= */
+class OneEuro {
+  constructor(minCutoff = 1.4, beta = 0.015, dCutoff = 1){ Object.assign(this, { minCutoff, beta, dCutoff }); this.t0 = null; }
+  static a(dt, c){ const tau = 1 / (2 * Math.PI * c); return 1 / (1 + tau / dt); }
+  reset(){ this.t0 = null; }
+  filter(x, t){
+    if (this.t0 === null){ this.t0 = t; this.x0 = x; this.dx0 = 0; return x; }
+    const dt = Math.max(1e-3, t - this.t0);
+    const dx = (x - this.x0) / dt;
+    const edx = this.dx0 + OneEuro.a(dt, this.dCutoff) * (dx - this.dx0);
+    const cutoff = this.minCutoff + this.beta * Math.abs(edx);
+    const ex = this.x0 + OneEuro.a(dt, cutoff) * (x - this.x0);
+    this.t0 = t; this.x0 = ex; this.dx0 = edx;
+    return ex;
+  }
+}
+const fPos = [new OneEuro(), new OneEuro(), new OneEuro()];
+const fScale = new OneEuro(1.0, 0.01);
+const smoothQ = new THREE.Quaternion(); let haveQ = false;
+let lostFrames = 0;
+
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion();
+function track(lm, tSec){
+  const P = i => new THREE.Vector3(lm[i].x * vw, (1 - lm[i].y) * vh, -lm[i].z * vw);
+  const rOut = P(33), rIn = P(133), lIn = P(362), lOut = P(263), top = P(10), chin = P(152), nb = P(168);
+
+  const xA = lOut.clone().sub(rOut);
+  const eyeDist = xA.length(); xA.normalize();
+  const yA = top.clone().sub(chin); yA.sub(xA.clone().multiplyScalar(yA.dot(xA))).normalize();
+  const zA = new THREE.Vector3().crossVectors(xA, yA).normalize();
+  _m.makeBasis(xA, yA, zA); _q.setFromRotationMatrix(_m);
+
+  const scale = eyeDist * 1.56 * state.fitScale;
+  const mid = rOut.clone().add(rIn).add(lIn).add(lOut).multiplyScalar(0.25);
+  const fwd = nb.clone().sub(mid).dot(zA);
+  const pos = mid.add(zA.clone().multiplyScalar(fwd + 0.02 * scale)).add(yA.clone().multiplyScalar(state.fitOffY * scale));
+
+  if (!haveQ){ smoothQ.copy(_q); haveQ = true; }
+  const ang = smoothQ.angleTo(_q);
+  smoothQ.slerp(_q, Math.min(1, 0.25 + ang * 4));
+
+  anchor.position.set(fPos[0].filter(pos.x, tSec), fPos[1].filter(pos.y, tSec), fPos[2].filter(pos.z, tSec));
+  anchor.quaternion.copy(smoothQ);
+  const s = fScale.filter(scale, tSec);
+  anchor.scale.set(s, s, s);
+
+  if (state.debug){
+    const arr = dbgGeo.attributes.position.array;
+    for (let i = 0; i < lm.length && i < 478; i++){ arr[i * 3] = lm[i].x * vw; arr[i * 3 + 1] = (1 - lm[i].y) * vh; arr[i * 3 + 2] = 0; }
+    dbgGeo.attributes.position.needsUpdate = true;
+  }
+}
+
+let landmarker = null;
+async function initLandmarker(){
+  const fileset = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  const opts = delegate => ({
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+      delegate,
+    },
+    runningMode: 'VIDEO', numFaces: 1,
+  });
+  try { landmarker = await FaceLandmarker.createFromOptions(fileset, opts('GPU')); }
+  catch (e){ console.warn('GPU no disponible, usando CPU', e); landmarker = await FaceLandmarker.createFromOptions(fileset, opts('CPU')); }
+}
+
+async function initCamera(){
+  if (!navigator.mediaDevices?.getUserMedia){
+    throw Object.assign(new Error('insecure'), { name: 'Insecure' });
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false,
+  });
+  video.srcObject = stream;
+  await video.play();
+  await new Promise(r => video.videoWidth ? r() : video.addEventListener('loadedmetadata', r, { once: true }));
+  syncVideo();
+}
+
+/* ---------- Bucle ---------- */
+let lastVideoTime = -1, lastT = performance.now(), fps = 0;
+const hint = document.getElementById('hint');
+const debugEl = document.getElementById('debug');
+function loop(){
+  requestAnimationFrame(loop);
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  fps = fps * 0.9 + (1 / Math.max(dt, 1e-3)) * 0.1;
+  syncVideo();
+
+  if (landmarker && vw && video.currentTime !== lastVideoTime){
+    lastVideoTime = video.currentTime;
+    const res = landmarker.detectForVideo(video, now);
+    if (res.faceLandmarks && res.faceLandmarks.length){
+      if (lostFrames > 8){ fPos.forEach(f => f.reset()); fScale.reset(); haveQ = false; }
+      lostFrames = 0;
+      track(res.faceLandmarks[0], now / 1000);
+      anchor.visible = true;
+    } else {
+      lostFrames++;
+      if (lostFrames > 8) anchor.visible = false;
+    }
+    hint.hidden = anchor.visible;
+  }
+
+  // Animación Transitions (comprimida para la demo: en la vida real tarda ~30 s)
+  if (state.tint !== state.tintTarget){
+    const rate = state.tintTarget > state.tint ? 0.45 : 0.3;
+    const d = state.tintTarget - state.tint;
+    state.tint += Math.sign(d) * Math.min(Math.abs(d), rate * dt);
+    updateLens();
+  }
+
+  dbgPts.visible = state.debug;
+  if (state.debug){
+    debugEl.textContent = `fps ${fps.toFixed(0)}\nvideo ${vw}×${vh}\nescala ${state.fitScale.toFixed(2)}  (+/−)\naltura ${state.fitOffY.toFixed(3)}  (W/S)\nmontura ←/→${modelInfo()}`;
+  }
+  renderer.render(scene, camera);
+}
+
+/* =========================================================
+   INTERFAZ
+   ========================================================= */
+const framesEl = document.getElementById('frames');
+const swatchesEl = document.getElementById('swatches');
+
+function drawThumb(cv, def, col){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = 240, H = 90; cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, W, H);
+  const P = framePaths(def);
+  const k = (W - 16) / (P.halfWidth * 2);
+  const tx = x => W / 2 + x * k, ty = y => H / 2 - y * k;
+  const path = pts => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(tx(x), ty(y)) : g.moveTo(tx(x), ty(y))); g.closePath(); };
+  let fill = col.hex;
+  if (col.hex === 'carey'){ const gr = g.createLinearGradient(0, 0, W, H); gr.addColorStop(0, '#7a4418'); gr.addColorStop(.5, '#c98a3d'); gr.addColorStop(1, '#3a1d0a'); fill = gr; }
+  g.fillStyle = fill;
+  if (col.clear) g.globalAlpha = 0.6;
+  path(P.rOuter); g.fill(); path(P.lOuter); g.fill();
+  g.globalCompositeOperation = 'destination-out';
+  path(P.rInner); g.fill(); path(P.lInner); g.fill();
+  g.globalCompositeOperation = 'source-over';
+  g.strokeStyle = typeof fill === 'string' ? fill : '#a8692c';
+  g.lineWidth = def.metal ? 2.5 : 6; g.lineCap = 'round';
+  const by = P.topY * (def.metal ? 0.42 : 0.5);
+  g.beginPath(); g.moveTo(tx(def.bridge / 2), ty(by)); g.quadraticCurveTo(tx(0), ty(by + 0.04), tx(-def.bridge / 2), ty(by)); g.stroke();
+  g.globalAlpha = 1;
+}
+
+function buildFramesUI(){
+  framesEl.innerHTML = '';
+  FRAMES.forEach((def, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'frame-card'; b.id = 'frame-' + def.id;
+    const name = document.createElement('b'); name.textContent = def.nombre;
+    const meta = document.createElement('small'); meta.textContent = def.medidas;
+    b.addEventListener('click', () => setFrame(i, 0));
+    framesEl.append(b);
+    if (isGLB(def)){
+      const ph = document.createElement('div'); ph.className = 'ph'; ph.textContent = 'Cargando…';
+      b.append(ph, name, meta);
+      renderGLBThumb(def, b);
+    } else {
+      const cv = document.createElement('canvas');
+      b.append(cv, name, meta);
+      drawThumb(cv, def, def.colores[0]);
+    }
+  });
+  document.getElementById('frameCount').textContent = FRAMES.length + ' modelos';
+}
+
+function swatchBg(col){
+  if (col.hex === 'carey') return 'radial-gradient(circle at 30% 30%, #c98a3d, #6b3a14 55%, #2a1608)';
+  return col.muestra || col.hex || '#888';
+}
+function renderFrameUI(){
+  const def = FRAMES[state.frame], col = def.colores[state.color];
+  FRAMES.forEach((f, i) => document.getElementById('frame-' + f.id).setAttribute('aria-pressed', String(i === state.frame)));
+  swatchesEl.innerHTML = '';
+  def.colores.forEach((c, i) => {
+    const s = document.createElement('button');
+    s.type = 'button'; s.className = 'swatch'; s.style.background = swatchBg(c);
+    s.setAttribute('aria-label', c.n); s.setAttribute('aria-pressed', String(i === state.color));
+    s.addEventListener('click', () => setFrame(state.frame, i));
+    swatchesEl.append(s);
+  });
+  document.getElementById('colorName').textContent = col.n;
+  document.getElementById('nowName').textContent = def.nombre + ' · ' + col.n;
+  document.getElementById('nowInfo').textContent = def.estilo + ' · ' + def.medidas + ' · ' + def.ref;
+  const card = document.getElementById('frame-' + def.id);
+  card.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+}
+
+function buildTintUI(){
+  const wrap = document.getElementById('tintChips');
+  wrap.innerHTML = '';
+  for (const [key, t] of Object.entries(TINTS)){
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.id = 'tintc-' + key;
+    b.innerHTML = `<span class="dot" style="background:${t.hex}"></span>`;
+    b.append(t.n);
+    b.setAttribute('aria-pressed', String(state.tintColor === key));
+    b.addEventListener('click', () => {
+      state.tintColor = key;
+      document.documentElement.style.setProperty('--tint-dark', t.hex);
+      wrap.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', String(c === b)));
+      if (state.tint < 0.15 && !state.sun){ state.tintTarget = 0.85; setSun(true); }
+      updateLens();
+    });
+    wrap.append(b);
+  }
+}
+
+const btnSun = document.getElementById('btnSun');
+function setSun(on){
+  state.sun = on;
+  btnSun.setAttribute('aria-pressed', String(on));
+  btnSun.textContent = on ? 'Volver a interior' : 'Salir al sol';
+}
+btnSun.addEventListener('click', () => { setSun(!state.sun); state.tintTarget = state.sun ? 1 : 0; });
+
+document.getElementById('tint').addEventListener('input', e => {
+  state.tint = state.tintTarget = e.target.value / 100;
+  setSun(state.tint > 0.5);
+  updateLens();
+});
+
+function bindToggle(id, key){
+  const el = document.getElementById(id);
+  el.addEventListener('click', () => { state[key] = !state[key]; el.setAttribute('aria-pressed', String(state[key])); updateLens(); });
+}
+bindToggle('tgAR', 'ar');
+bindToggle('tgBlue', 'blue');
+
+document.getElementById('btnFull').addEventListener('click', async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch (e){ /* algunos navegadores no lo permiten */ }
+});
+
+/* ---------- Foto ---------- */
+const modal = document.getElementById('modal');
+document.getElementById('btnPhoto').addEventListener('click', () => {
+  renderer.render(scene, camera);
+  const src = renderer.domElement;
+  const out = document.createElement('canvas');
+  out.width = src.width; out.height = src.height;
+  const g = out.getContext('2d');
+  g.save(); g.translate(out.width, 0); g.scale(-1, 1); g.drawImage(src, 0, 0); g.restore();
+  const def = FRAMES[state.frame], col = def.colores[state.color];
+  const pad = Math.round(out.width * 0.03), fs = Math.max(14, Math.round(out.width * 0.028));
+  g.fillStyle = 'rgba(14,17,19,.78)'; g.fillRect(0, out.height - fs * 3.2, out.width, fs * 3.2);
+  g.fillStyle = '#eef1f2'; g.font = `600 ${fs}px Sora, sans-serif`;
+  g.fillText(`${def.nombre} · ${col.n}`, pad, out.height - fs * 1.75);
+  g.fillStyle = '#d6a15a'; g.font = `500 ${Math.round(fs * 0.7)}px Manrope, sans-serif`;
+  const lens = [state.tint > 0.05 ? `Transitions ${TINTS[state.tintColor].n}` : null, state.ar ? 'Antirreflejo' : null, state.blue ? 'Luz azul' : null].filter(Boolean).join(' · ');
+  g.fillText(`${def.medidas} · ${def.ref}${lens ? ' · ' + lens : ''}`, pad, out.height - fs * 0.75);
+  const url = out.toDataURL('image/png');
+  document.getElementById('photoImg').src = url;
+  const save = document.getElementById('btnSave');
+  save.href = url; save.download = `probador-${def.id}.png`;
+  const fl = document.getElementById('flash');
+  fl.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => fl.classList.remove('on')));
+  setTimeout(() => { modal.hidden = false; }, 250);
+});
+document.getElementById('btnClose').addEventListener('click', () => { modal.hidden = true; });
+
+/* ---------- Teclado (para la demo en laptop) ---------- */
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowRight') setFrame(state.frame + 1);
+  else if (e.key === 'ArrowLeft') setFrame(state.frame - 1);
+  else if (e.key === 'd' || e.key === 'D'){ state.debug = !state.debug; debugEl.hidden = !state.debug; }
+  else if (!state.debug) return;
+  else if (e.key === '+' || e.key === '=') state.fitScale += 0.02;
+  else if (e.key === '-') state.fitScale -= 0.02;
+  else if (e.key === 'w' || e.key === 'W') state.fitOffY += 0.005;
+  else if (e.key === 's' || e.key === 'S') state.fitOffY -= 0.005;
+  else if (e.key === 'r' || e.key === 'R'){
+    const def = FRAMES[state.frame];
+    if (!isGLB(def)) return;
+    def.giroExtra = ((def.giroExtra || 0) + 90) % 360;
+    def._tpl = null;
+    setFrame(state.frame, state.color);
+    renderGLBThumb(def, document.getElementById('frame-' + def.id));
+  }
+});
+
+function modelInfo(){
+  const def = FRAMES[state.frame];
+  if (!isGLB(def) || !def._info) return '';
+  return `\nmodelo: giro ${def._info.rotY}° (R)\nancho ${def._info.anchoMm} mm · lentes ${def._info.lentes}`;
+}
+
+/* ---------- Cargar un modelo propio ---------- */
+let propios = 0;
+document.getElementById('fileGlb').addEventListener('change', async e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (!/\.glb$/i.test(file.name)){ toast('Ese archivo no es .glb. Exporta desde Blender como «glTF Binary (.glb)».'); return; }
+  const def = {
+    id: 'propio-' + (++propios), nombre: file.name.replace(/\.glb$/i, ''), estilo: 'Modelo cargado', ref: '—',
+    medidas: 'Medidas del archivo', colores: [{ n: 'Original', muestra: '#7d868c' }], _buf: await file.arrayBuffer(),
+  };
+  FRAMES.push(def);
+  buildFramesUI();
+  await setFrame(FRAMES.length - 1, 0);
+  if (def._info && def._info.lentes === 0) toast('Modelo cargado, pero no encontré lentes. Nombra el objeto de los lentes «lente» para que funcionen Transitions y los tratamientos.', 7000);
+});
+
+/* ---------- Arranque ---------- */
+buildFramesUI();
+buildTintUI();
+setFrame(0, 0);
+fitCamera();
+
+const statusEl = document.getElementById('status');
+const btnStart = document.getElementById('btnStart');
+btnStart.addEventListener('click', async () => {
+  btnStart.disabled = true;
+  statusEl.className = 'status';
+  try {
+    statusEl.textContent = 'Encendiendo la cámara…';
+    await initCamera();
+    statusEl.textContent = 'Cargando el seguimiento facial…';
+    await initLandmarker();
+    document.getElementById('start').hidden = true;
+    fitCamera();
+  } catch (e){
+    console.error(e);
+    btnStart.disabled = false;
+    statusEl.className = 'status err';
+    const msgs = {
+      NotAllowedError: 'La cámara está bloqueada. Permite el acceso a la cámara en el navegador y vuelve a tocar Empezar.',
+      NotFoundError: 'No se encontró ninguna cámara conectada.',
+      NotReadableError: 'Otra aplicación está usando la cámara. Ciérrala y vuelve a intentar.',
+      Insecure: 'El navegador no permite usar la cámara aquí. Abre el archivo en Chrome o Edge, o publícalo en un sitio con https.',
+    };
+    statusEl.textContent = msgs[e.name] || ('No se pudo iniciar: ' + (e.message || e));
+  }
+});
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

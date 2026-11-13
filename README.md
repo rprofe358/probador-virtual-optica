@@ -7,7 +7,10 @@ Prototipo de probador de monturas con realidad aumentada para una óptica. Corre
 ## Cómo funciona el 3D
 
 - **Pose de la cabeza:** se ajusta la cara canónica de MediaPipe (468 puntos, en cm) a 33 puntos estables de la cara detectada (frente, nariz, comisuras de los ojos, pómulos y sienes). Así se obtienen el giro real de la cabeza y el tamaño real de la cara, y cada montura se dibuja con su ancho real en mm.
-- **Oclusión:** la cara detectada en cada cuadro funciona como una superficie invisible que tapa lo que queda detrás (por ejemplo, la patilla del lado lejano). Detrás de la cara hay un cráneo invisible cuyo ancho se ajusta a las patillas de cada montura.
+- **Oclusión:** la cara detectada en cada cuadro funciona como una superficie invisible que tapa lo que queda detrás (por ejemplo, la patilla del lado lejano). Detrás de la cara hay una cabeza completa invisible (orejas, nuca, cuello) alineada con la cara y ajustada al ancho de la cara de cada persona.
+- **Posición:** los lentes se centran en las pupilas de la persona y se apoyan delante del puente de su nariz. El frente de la montura nunca lo corta la cara.
+- **Patillas:** se abren desde la bisagra solo lo necesario para pasar por fuera de la cabeza y llegan a la parte de arriba de la oreja. Si la bisagra queda baja, el frente se inclina unos grados (inclinación pantoscópica), como en unos lentes reales.
+- **Suavizado:** filtro One Euro sobre posición, escala y giro: estable con la cabeza quieta y sin retraso al moverse.
 
 ## Modo ajuste (personal de la óptica)
 
@@ -25,6 +28,8 @@ Se activa con la tecla **D** o con **5 toques seguidos** sobre el nombre de la �
 ## Estructura
 
 - `index.html`: la app completa.
+- `recursos/cabeza-oclusor.glb`: cabeza invisible para la oclusión, ya alineada a la cara canónica de MediaPipe.
+- `herramientas/preparar-cabeza.mjs`: alinea otro modelo de cabeza con la cara canónica.
 - `monturas/`: modelos 3D de las monturas (`.glb`, Y arriba, frente hacia +Z, lentes en un objeto llamado `lente`).
 - `herramientas/preparar-monturas.mjs`: limpia y comprime modelos descargados (requiere Node y `@gltf-transform`).
 - `herramientas/empaquetar.py`: genera una versión en un solo archivo HTML con los modelos incluidos.
@@ -32,6 +37,8 @@ Se activa con la tecla **D** o con **5 toques seguidos** sobre el nombre de la �
 ## Créditos
 
 Malla canónica de la cara: [MediaPipe](https://github.com/google-ai-edge/mediapipe) (Apache 2.0).
+
+Cabeza para la oclusión: «Male Head» de [Alexander Antipov](https://sketchfab.com/Dessen), https://sketchfab.com/3d-models/male-head-0247a25a04ba46b99629130277fe39b7 (CC BY 4.0). Se alineó a la cara canónica, se quitó la zona de la cara y los materiales.
 
 ### Modelos 3D de prueba
 

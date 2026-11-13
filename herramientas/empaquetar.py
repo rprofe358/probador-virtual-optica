@@ -1,8 +1,8 @@
-# Mete las monturas .glb dentro del HTML para que funcione con doble clic, sin servidor.
+# Mete las monturas y la cabeza (.glb) dentro del HTML para que funcione con doble clic, sin servidor.
 import base64, json, pathlib, sys
 base = pathlib.Path(__file__).resolve().parent.parent
 html = (base / 'index.html').read_text(encoding='utf-8')
-modelos = {f'monturas/{p.name}': base64.b64encode(p.read_bytes()).decode() for p in sorted((base / 'monturas').glob('*.glb'))}
+modelos = {f'{d}/{p.name}': base64.b64encode(p.read_bytes()).decode() for d in ('monturas', 'recursos') for p in sorted((base / d).glob('*.glb'))}
 tag = '<script>window.MODELOS_EMBEBIDOS = ' + json.dumps(modelos) + ';</script>'
 out = base / 'dist' / 'probador-virtual.html'
 out.parent.mkdir(exist_ok=True)

@@ -2093,7 +2093,8 @@ const G = { on: true, ready: false, param: 0,
             pos: { x: 0, y: 0 },        // centro del pellizco (destino)
             cur: { x: 0, y: 0, t: null },   // cursor dibujado (se interpola a 60 fps)
             target: 0, disp: 0,         // valor del dial: destino y lo que se dibuja
-            delta: 0, dispDelta: 0, pending: -1, pendingT: 0, dirty: true, shownUntil: 0 };
+            delta: 0, dispDelta: 0, pending: -1, pendingT: 0, dirty: true, shownUntil: 0,
+            angHist: [], spike: 0, p0Prev: null, lastAng: 0, cIdx: 0 };
 const LENS_OPTS = TR.flatMap(t => t.colores.map((c, ci) => ({ type: t.id, color: ci, n: t.id === 'claro' ? 'Sin Transitions' : (c.n === t.n ? t.n : `${t.n} · ${c.n}`) })));
 const DIAL = [
   { id: 'luz', n: 'Oscuridad del lente', kind: 'cont', short: 'Oscuridad',
@@ -2115,6 +2116,8 @@ const DIAL = [
 const STEP = THREE.MathUtils.degToRad(22);   // un paso del dial cada 22° de giro
 const DEAD = THREE.MathUtils.degToRad(3);    // zona muerta: el temblor de la mano no mueve nada
 const DWELL_MS = 350;                        // la montura cambia cuando el dial se queda quieto este tiempo
+const MAX_JUMP = THREE.MathUtils.degToRad(40);   // giro imposible entre dos cuadros: error de detección
+const HYST = 0.7;                            // cuánto pasar del medio para cambiar de paso
 
 async function initHands(){
   try {
@@ -2190,22 +2193,45 @@ function handStep(res, now){
   }
   G.lastHand = now; lastActivity = now;
   const P = i => videoToScreen(lm[i].x, lm[i].y);
-  const p0 = P(0), p4 = P(4), p8 = P(8), p9 = P(9);
-  const size = Math.max(1, dist2(p0, p9));
-  const pd = dist2(p4, p8) / size;
+  const p0 = P(0), p4 = P(4), p5 = P(5), p8 = P(8), p9 = P(9), p13 = P(13), p17 = P(17);
+  // tamaño de la mano con dos huesos: inclinarla acorta uno pero no el otro
+  const size = Math.max(1, dist2(p0, p9), dist2(p5, p17) * 1.15);
   const mid = { x: (p4.x + p8.x) / 2, y: (p4.y + p8.y) / 2 };
-  // ángulo de la mano (muñeca → nudillo del medio), continuo y suavizado
-  const raw = Math.atan2(p9.y - p0.y, p9.x - p0.x);
-  if (G.rawPrev == null){ G.ang = raw; G.angF = new OneEuro(1.0, 0.3); }
-  else { let d = raw - G.rawPrev; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; G.ang += d; }
-  G.rawPrev = raw;
-  const ang = G.angF.filter(G.ang, now / 1000);
 
-  // pellizco con histéresis y confirmación: 2 cuadros para empezar, 3 para soltar (evita parpadeos)
-  const closeNow = G.pinch ? pd < 0.5 : pd < 0.3;
+  // cuadro con un salto imposible (la mano "se teletransporta" o gira > 40° en 33 ms): error de detección, se ignora.
+  // Si el salto se mantiene 3 cuadros es real: se toma como nueva referencia sin mover el dial.
+  const mc = { x: (p5.x + p9.x + p13.x + p17.x) / 4, y: (p5.y + p9.y + p13.y + p17.y) / 4 };
+  const raw = Math.atan2(mc.y - p0.y, mc.x - p0.x);   // muñeca → centro de los nudillos: más estable que un solo punto
+  if (G.rawPrev == null){
+    G.ang = raw; G.rawPrev = raw; G.angHist = [raw, raw, raw]; G.angF = new OneEuro(1.0, 0.3); G.spike = 0; G.p0Prev = p0;
+  } else {
+    let d = raw - G.rawPrev; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
+    const jump = Math.abs(d) > MAX_JUMP || dist2(p0, G.p0Prev) > size * 1.2;
+    if (jump && G.spike < 2){ G.spike++; return; }
+    if (jump) d = 0;
+    G.spike = 0; G.ang += d; G.rawPrev = raw; G.p0Prev = p0;
+  }
+  // mediana de los últimos 3 cuadros: borra los tirones sueltos de la detección
+  G.angHist.push(G.ang); if (G.angHist.length > 3) G.angHist.shift();
+  const med = G.angHist.slice().sort((a, b) => a - b)[1];
+  const ang = G.angF.filter(med, now / 1000);
+
+  // distancia pulgar-índice: en 2D y en 3D (en metros, no cambia al inclinar la mano)
+  const pd2 = dist2(p4, p8) / size;
+  const wl = res.worldLandmarks && res.worldLandmarks[0];
+  let pd3 = pd2;
+  if (wl){ const d3 = (a, b) => Math.hypot(wl[a].x - wl[b].x, wl[a].y - wl[b].y, wl[a].z - wl[b].z);
+           pd3 = d3(4, 8) / Math.max(1e-4, d3(0, 9), d3(5, 17) * 1.15); }
+  // pellizco: para empezar ambas medidas deben estar cerradas; para soltar, ambas abiertas.
+  // Confirmación de 2 cuadros para empezar y 3 para soltar (evita parpadeos)
+  const closeNow = G.pinch ? Math.min(pd2, pd3) < 0.5 : Math.max(pd2, pd3) < 0.3;
   if (closeNow){ G.pinchIn++; G.pinchOut = 0; } else { G.pinchOut++; G.pinchIn = 0; }
   if (!G.pinch && G.pinchIn >= 2){ G.pinch = true; G.pinchT = now; }
   if (G.pinch && G.pinchOut >= 3){ G.pinch = false; releaseGrab(); }
+  // los dedos empiezan a abrirse: el dial se congela para que soltar no mueva el valor
+  const opening = G.pinch && (!closeNow || Math.min(pd2, pd3) > 0.4);
+  if (G.grabbed && opening) G.grabAng += ang - G.lastAng;   // embrague: lo que gire ahora no cuenta
+  G.lastAng = ang;
 
   cursor.classList.add('on'); cursor.classList.toggle('pinch', G.pinch);
   G.pos = G.pinch ? mid : p8;
@@ -2214,9 +2240,10 @@ function handStep(res, now){
   if (G.pinch && !G.grabbed && now - G.pinchT > 120){
     const p = DIAL[G.param];
     G.grabbed = true; G.grabAng = ang; G.grabVal = p.get(); G.target = G.disp = G.grabVal; G.delta = G.dispDelta = 0; G.pending = -1;
+    G.cIdx = p.kind === 'disc' ? G.grabVal : 0;
     showDial(mid.x, mid.y);
   }
-  if (G.grabbed){
+  if (G.grabbed && !opening){
     const p = DIAL[G.param];
     let delta = ang - G.grabAng;
     delta = Math.sign(delta) * Math.max(0, Math.abs(delta) - DEAD);
@@ -2227,7 +2254,10 @@ function handStep(res, now){
     } else {
       const n = p.count();
       G.target = G.grabVal + delta / STEP;                // valor continuo: los ticks giran suave
-      const idx = ((Math.round(G.target) % n) + n) % n;
+      // histéresis: hay que pasar un poco más allá de la mitad para cambiar de paso (no titila en el borde)
+      while (G.target > G.cIdx + HYST) G.cIdx++;
+      while (G.target < G.cIdx - HYST) G.cIdx--;
+      const idx = ((G.cIdx % n) + n) % n;
       if (p.heavy){
         if (idx !== G.pending){ G.pending = idx; G.pendingT = now; if (idx !== p.get()) pulseDial(); }
         else if (idx !== p.get() && now - G.pendingT > DWELL_MS) p.set(idx);

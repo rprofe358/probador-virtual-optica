@@ -1,0 +1,23 @@
+{
+  "name": "probador-virtual-android",
+  "private": true,
+  "version": "1.0.0",
+  "description": "App Android (Capacitor) del probador virtual de lentes, funciona sin internet",
+  "scripts": {
+    "www": "node preparar-www.mjs",
+    "sync": "node preparar-www.mjs && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "6.2.0",
+    "@capacitor/core": "6.2.0",
+    "@capacitor/filesystem": "6.0.2",
+    "@capacitor/share": "6.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "6.2.0",
+    "@fontsource/manrope": "5.1.0",
+    "@fontsource/sora": "5.1.0",
+    "@mediapipe/tasks-vision": "0.10.14",
+    "three": "0.160.0"
+  }
+}

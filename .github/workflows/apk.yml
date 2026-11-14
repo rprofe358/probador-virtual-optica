@@ -1,0 +1,76 @@
+name: APK Android
+
+# Compila la app Android del probador (todo incluido, funciona sin internet)
+# y la publica en la Release «apk» para descargarla desde el teléfono o el TV.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'monturas/**'
+      - 'recursos/**'
+      - 'app-android/**'
+      - '.github/workflows/apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Dependencias
+        working-directory: app-android
+        run: npm ci
+
+      - name: Página sin internet (www)
+        working-directory: app-android
+        run: node preparar-www.mjs
+
+      - name: Sincronizar Capacitor
+        working-directory: app-android
+        run: npx cap sync android
+
+      - name: Compilar APK
+        working-directory: app-android/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk ../../probador-virtual.apk
+          ls -la ../../probador-virtual.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: probador-virtual-apk
+          path: probador-virtual.apk
+
+      - name: Publicar en la Release «apk»
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTAS="Probador virtual para Android · versión 1.0.${{ github.run_number }} · $(date -u +'%Y-%m-%d %H:%M') UTC
+
+          Descarga probador-virtual.apk en el equipo Android y ábrela para instalarla (permite instalar apps de origen desconocido).
+          Funciona sin internet. Necesita cámara (frontal o USB)."
+          if gh release view apk >/dev/null 2>&1; then
+            gh release edit apk --title "Probador virtual (Android)" --notes "$NOTAS"
+          else
+            gh release create apk --title "Probador virtual (Android)" --notes "$NOTAS" --latest
+          fi
+          gh release upload apk probador-virtual.apk --clobber

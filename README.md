@@ -35,6 +35,17 @@ Se activa con la tecla **D** o con **5 toques seguidos** sobre el nombre de la �
 | R | Girar 90° el modelo cargado |
 | ← / → | Cambiar de montura |
 
+## App Android (APK)
+
+La carpeta `app-android/` convierte la página en una app Android con [Capacitor](https://capacitorjs.com/). La app trae todo adentro (Three.js, MediaPipe con sus modelos, fuentes, monturas y entorno), así que **funciona sin internet**.
+
+- **Descarga:** la APK más reciente está en la Release [«apk»](https://github.com/rprofe358/probador-virtual-optica/releases/tag/apk) (`probador-virtual.apk`). Se compila sola con GitHub Actions (`.github/workflows/apk.yml`) cada vez que cambian la página, las monturas o la app.
+- **Instalar:** abrir la APK en el equipo Android y permitir «instalar apps de origen desconocido». Las versiones nuevas se instalan encima de la anterior (misma firma).
+- **Equipos:** teléfonos, tablets, pantallas táctiles y Android TV. Necesita una cámara frontal o una cámara USB que el equipo reconozca.
+- **En la app:** pantalla completa, la pantalla no se apaga, pide permiso de cámara la primera vez. «Guardar foto» la guarda en *Documentos › Probador virtual* y abre el menú para enviarla (WhatsApp, Bluetooth, etc.).
+- **Compilar a mano:** en `app-android/`, `npm ci && node preparar-www.mjs && npx cap sync android`, luego `./gradlew assembleRelease` dentro de `android/` (requiere Android SDK y Java 17).
+- `app-android/iconos.mjs` genera el ícono, el banner de Android TV y la pantalla de carga.
+
 ## Estructura
 
 - `index.html`: la app completa (se genera con `herramientas/ensamblar.py` a partir de `src/shell.html`, la interfaz, y `src/ui.js`, su lógica).

@@ -1934,7 +1934,30 @@ function closePhoto(){ clearTimeout(photoTimer); modal.hidden = true; lastActivi
 $('btnPhoto').addEventListener('click', startCountdown);
 $('btnClose').addEventListener('click', closePhoto);
 $('btnRetake').addEventListener('click', () => { closePhoto(); setTimeout(startCountdown, 200); });
-$('btnSave').addEventListener('click', () => { clearTimeout(photoTimer); photoTimer = setTimeout(closePhoto, 20000); });
+$('btnSave').addEventListener('click', e => {
+  clearTimeout(photoTimer); photoTimer = setTimeout(closePhoto, 20000);
+  if (NATIVA){ e.preventDefault(); saveNative($('btnSave').href, $('btnSave').download); }
+});
+
+/* ---------- App Android (Capacitor): la foto se guarda en el equipo y se puede compartir ---------- */
+const NATIVA = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+if (NATIVA) document.documentElement.classList.add('nativa');
+async function saveNative(dataUrl, name){
+  const cap = window.Capacitor;
+  const Filesystem = cap.registerPlugin('Filesystem'), Share = cap.registerPlugin('Share');
+  const data = dataUrl.split(',')[1];
+  const file = name.replace(/\.png$/, '') + '-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.png';
+  let guardada = false;
+  try { await Filesystem.writeFile({ path: 'Probador virtual/' + file, data, directory: 'DOCUMENTS', recursive: true }); guardada = true; } catch (err){ console.warn('No se pudo guardar en Documentos', err); }
+  try {
+    const { uri } = await Filesystem.writeFile({ path: file, data, directory: 'CACHE' });
+    await Share.share({ title: 'Mi foto del probador', files: [uri], dialogTitle: 'Enviar la foto' });
+  } catch (err){
+    if (!/cancel/i.test(String(err && err.message))) toast(guardada ? 'Foto guardada en Documentos › Probador virtual' : 'No se pudo guardar la foto');
+    return;
+  }
+  if (guardada) toast('Foto guardada en Documentos › Probador virtual');
+}
 
 /* =========================================================
    ENTRADA: lentes flotando en un estudio

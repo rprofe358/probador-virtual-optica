@@ -1,0 +1,11 @@
+{
+  "appId": "co.optica.probadorvirtual",
+  "appName": "Probador Virtual",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": false,
+    "webContentsDebuggingEnabled": false,
+    "backgroundColor": "#0c0d10"
+  }
+}

@@ -195,6 +195,9 @@ button:focus-visible,input:focus-visible,label:focus-visible{outline:2px solid v
 .hand-cursor{position:absolute;left:0;top:0;width:34px;height:34px;border-radius:50%;will-change:transform;pointer-events:none;z-index:7;opacity:0;transition:opacity .2s,width .15s,height .15s}
 .hand-cursor.on{opacity:1}
 .hand-cursor.pinch{width:22px;height:22px;background:rgba(255,255,255,.9)}
+.hand-cursor.point{width:18px;height:18px;background:#fff;box-shadow:0 0 0 6px rgba(255,255,255,.28)}
+.dial.selecting .dial-tabs{background:rgba(20,24,32,.62);box-shadow:0 0 0 2px rgba(255,255,255,.55)}
+.dial.selecting .dial-tabs span{font-size:14px;padding:7px 13px}
 
 /* Modales */
 .modal{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(6,9,14,.45);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
@@ -332,8 +335,8 @@ button:focus-visible,input:focus-visible,label:focus-visible{outline:2px solid v
         <div><b>Junta el pulgar y el índice</b><span>Como si tomaras una perilla. Aparece el dial.</span></div></li>
       <li><svg viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M14 32a18 18 0 0 1 32-11"/><path d="M46 13v8h-8"/><path d="M50 32a18 18 0 0 1-32 11"/><path d="M18 51v-8h8"/></svg>
         <div><b>Gira la mano</b><span>Hacia la derecha sube, hacia la izquierda baja. Suelta para dejarlo así.</span></div></li>
-      <li><svg viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M24 40V24m6 14V20m6 18V21m6 17V26M21 41c0 8 5 13 13 13s12-5 12-13"/><path d="M4 30h9m-4-4 4 4-4 4M60 30h-9m4-4-4 4 4 4"/></svg>
-        <div><b>Desliza la mano abierta a un lado</b><span>A la derecha pasas al siguiente control y a la izquierda vuelves al anterior: oscuridad del lente, color de la montura, montura y color del lente.</span></div></li>
+      <li><svg viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M30 38V12a3 3 0 0 1 6 0v22"/><path d="M36 30h4a4 4 0 0 1 4 4v4c0 9-5 14-12 14s-12-5-12-12v-4a4 4 0 0 1 4-4h6"/><path d="M4 22h10m-4-4 4 4-4 4M60 22H50m4-4-4 4 4 4"/></svg>
+        <div><b>Levanta solo el índice ☝️</b><span>Aparece el selector arriba del dial. Mueve el dedo a la izquierda o a la derecha para elegir qué controlar: oscuridad del lente, color de la montura, montura o color del lente. Baja el dedo para dejarlo.</span></div></li>
       <li><svg viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M26 34V12m10 22V14M24 36c-4 0-6 3-6 7 0 7 6 11 14 11s14-5 14-12v-6c0-3-3-4-5-2"/><path d="M36 34l5-1"/></svg>
         <div><b>Haz ✌️ con la mano</b><span>Arranca la foto con cuenta regresiva de 3 segundos. También con el botón blanco del centro.</span></div></li>
     </ol>

@@ -407,7 +407,7 @@ async function goApp(tab = null){
     setTimeout(() => flashNow(3200), 500);
     lastActivity = performance.now();
     // la primera vez, recordar que existe el dial con la mano
-    if (!goApp.tipShown){ goApp.tipShown = true; setTimeout(() => { if (screen === 'app' && G.on) toast('Pellizca y gira la mano para el dial · desliza la mano abierta para cambiar de control · ✌️ para la foto', 7000); }, 2500); }
+    if (!goApp.tipShown){ goApp.tipShown = true; setTimeout(() => { if (screen === 'app' && G.on) toast('Pellizca y gira la mano para el dial · ☝️ para cambiar de control · ✌️ para la foto', 7000); }, 2500); }
   } finally { starting = false; }
 }
 function goHome(){
@@ -444,7 +444,7 @@ const G = { on: true, ready: false, param: 0,
             target: 0, disp: 0,         // valor del dial: destino y lo que se dibuja
             delta: 0, dispDelta: 0, pending: -1, pendingT: 0, dirty: true, shownUntil: 0,
             angHist: [], spike: 0, p0Prev: null, lastAng: 0, cIdx: 0,
-            swipe: [], swipeCool: 0 };
+            sel: null, pointIn: 0, pointOut: 0 };
 const LENS_OPTS = TR.flatMap(t => t.colores.map((c, ci) => ({ type: t.id, color: ci, n: t.id === 'claro' ? 'Sin Transitions' : (c.n === t.n ? t.n : `${t.n} · ${c.n}`) })));
 const DIAL = [
   { id: 'luz', n: 'Oscuridad del lente', kind: 'cont', short: 'Oscuridad',
@@ -452,7 +452,8 @@ const DIAL = [
     label: () => TR_BY[state.trType].id === 'claro' ? 'Lente claro' : lightName(state.tint) },
   { id: 'color', n: 'Color de la montura', kind: 'disc', short: 'Color',
     count: () => FRAMES[state.frame].colores.length, get: () => state.color, set: i => setFrame(state.frame, i),   // se repinta en el sitio
-    label: () => FRAMES[state.frame].colores[state.color].n },
+    label: () => FRAMES[state.frame].colores[state.color].n,
+    swatch: i => { const c = FRAMES[state.frame].colores[i]; return { fill: c.muestra || c.hex || '#888', carey: c.hex === 'carey', clear: !!c.clear }; } },
   { id: 'montura', n: 'Montura', kind: 'disc', short: 'Montura',
     count: () => FRAMES.length, get: () => state.frame, set: i => setFrame(i, 0), label: () => FRAMES[state.frame].nombre,
     labelOf: i => FRAMES[i].nombre, heavy: true },   // cambiar de montura arma otro modelo: se aplica al detenerse
@@ -461,13 +462,14 @@ const DIAL = [
     get: () => Math.max(0, LENS_OPTS.findIndex(o => o.type === state.trType && o.color === state.trColor)),
     set: i => { const o = LENS_OPTS[i]; state.trType = o.type; state.trColor = o.color; state.mirror = 0;
                 if (o.type !== 'claro' && state.tintTarget < 0.5) state.tintTarget = 1; buildTintUI(); updateLens(); },
-    label: () => LENS_OPTS[Math.max(0, LENS_OPTS.findIndex(o => o.type === state.trType && o.color === state.trColor))].n },
+    label: () => LENS_OPTS[Math.max(0, LENS_OPTS.findIndex(o => o.type === state.trType && o.color === state.trColor))].n,
+    swatch: i => { const o = LENS_OPTS[i]; return { fill: TR_BY[o.type].colores[o.color].hex, clear: o.type === 'claro' }; } },
 ];
 const STEP = THREE.MathUtils.degToRad(22);   // un paso del dial cada 22° de giro
 const DEAD = THREE.MathUtils.degToRad(3);    // zona muerta: el temblor de la mano no mueve nada
 const DWELL_MS = 350;                        // la montura cambia cuando el dial se queda quieto este tiempo
 const MAX_JUMP = THREE.MathUtils.degToRad(40);   // giro imposible entre dos cuadros: error de detección
-const SWIPE_MS = 420, SWIPE_DIST = 1.5, SWIPE_COOL = 850;   // deslizar: 1,5 manos de recorrido en < 0,42 s
+const SEL_STEP = 0.75;                        // ☝️: mover el dedo 3/4 del largo de la mano pasa al control vecino
 const HYST = 0.7;                            // cuánto pasar del medio para cambiar de paso
 
 async function initHands(){
@@ -493,13 +495,18 @@ $('btnDial').addEventListener('click', () => {
   if (state.debug){ G.on = !G.on; updateDialPill(); toast(G.on ? 'Gestos activados' : 'Gestos desactivados', 1600); return; }
   $('gestureHelp').hidden = false;   // tocar «Gestos» explica cómo se usan
 });
-// deslizar la mano abierta: a la derecha el siguiente control, a la izquierda el anterior
-function switchParam(dir){
-  G.param = (G.param + dir + DIAL.length) % DIAL.length;
-  updateDialPill();
-  showDial(1800);
-  const d = $('dial');
-  d.animate([{ translate: `${dir * 26}px 0`, opacity: .4 }, { translate: '0 0', opacity: 1 }], { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' });
+// selector de controles con ☝️: se ve desde el primer momento y el dedo elige por posición (no por velocidad)
+function renderTabs(){
+  $('dialTabs').innerHTML = DIAL.map((q, i) => `<span class="${i === G.param ? 'on' : ''}">${q.short}</span>`).join('');
+}
+function endSelect(){
+  if (!G.sel) return;
+  G.sel = null; $('dial').classList.remove('selecting'); G.dirty = true;
+  hideDialLater(1800);
+}
+function hideDialLater(ms){
+  G.shownUntil = performance.now() + ms;
+  setTimeout(() => { if (!G.grabbed && !G.sel && performance.now() >= G.shownUntil) $('dial').classList.remove('on'); }, ms + 50);
 }
 
 // coordenadas normalizadas del video → píxeles de pantalla (con el espejo)
@@ -519,7 +526,11 @@ function isOpenPalm(lm){
   const spread = Math.hypot(lm[8].x - lm[20].x, lm[8].y - lm[20].y) > size * 0.75;
   return fingers && thumbOut && spread;
 }
-function fourFingersUp(lm){ return [[8, 6], [12, 10], [16, 14], [20, 18]].every(([t, p]) => fingerUp(lm, t, p)); }
+function isPointing(lm){   // ☝️ solo el índice arriba, lejos del pulgar
+  const w = lm[0], size = Math.hypot(lm[9].x - w.x, lm[9].y - w.y);
+  return fingerUp(lm, 8, 6) && !fingerUp(lm, 12, 10) && !fingerUp(lm, 16, 14) && !fingerUp(lm, 20, 18)
+      && Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y) > size * 0.6;
+}
 function fingerUp(lm, tip, pip){ const w = lm[0]; return Math.hypot(lm[tip].x - w.x, lm[tip].y - w.y) > Math.hypot(lm[pip].x - w.x, lm[pip].y - w.y) * 1.12; }
 function isPeace(lm){   // ✌️ índice y medio arriba y separados, anular y meñique doblados
   const w = lm[0], size = Math.hypot(lm[9].x - w.x, lm[9].y - w.y);
@@ -540,9 +551,9 @@ function handStep(res, now){
   const lm = res && res.landmarks && res.landmarks[0];
   const cursor = $('handCursor');
   if (!lm){
-    if (now - G.lastHand > 350){ releaseGrab(); cursor.classList.remove('on'); G.cur.t = null; G.rawPrev = null; }
-    if (now > G.shownUntil && !G.grabbed) $('dial').classList.remove('on');
-    G.peaceT = 0; G.palmT = 0; if (now - G.lastHand > 350) G.swipe.length = 0;
+    if (now - G.lastHand > 350){ releaseGrab(); endSelect(); cursor.classList.remove('on', 'point'); G.cur.t = null; G.rawPrev = null; }
+    if (now > G.shownUntil && !G.grabbed && !G.sel) $('dial').classList.remove('on');
+    G.peaceT = 0; G.palmT = 0;
     return;
   }
   G.lastHand = now; lastActivity = now;
@@ -595,7 +606,7 @@ function handStep(res, now){
     const p = DIAL[G.param];
     G.grabbed = true; G.grabAng = ang; G.grabVal = p.get(); G.target = G.disp = G.grabVal; G.delta = G.dispDelta = 0; G.pending = -1;
     G.cIdx = p.kind === 'disc' ? G.grabVal : 0;
-    showDial();
+    endSelect(); showDial();
   }
   if (G.grabbed && !opening){
     const p = DIAL[G.param];
@@ -619,20 +630,30 @@ function handStep(res, now){
     }
     G.dirty = true;
   }
-  // mano abierta deslizándose a un lado: siguiente o anterior control del dial
-  const open = !G.pinch && fourFingersUp(lm);
-  if (open && !G.grabbed){
-    const c = { x: (p0.x + mc.x) / 2, y: (p0.y + mc.y) / 2, t: now };
-    G.swipe.push(c);
-    while (G.swipe.length && now - G.swipe[0].t > SWIPE_MS) G.swipe.shift();
-    const a = G.swipe[0], dx = c.x - a.x, dy = c.y - a.y;
-    if (now > G.swipeCool && Math.abs(dx) > size * SWIPE_DIST && Math.abs(dx) > Math.abs(dy) * 2){
-      G.swipe.length = 0; G.swipeCool = now + SWIPE_COOL;   // la pausa evita que el regreso de la mano cuente como otro gesto
-      switchParam(dx > 0 ? 1 : -1);
+  // ☝️ solo el índice: aparece el selector y el dedo a la izquierda o derecha elige el control; al bajarlo queda elegido
+  const pointing = !G.pinch && !G.grabbed && isPointing(lm);
+  if (pointing){ G.pointIn++; G.pointOut = 0; } else { G.pointOut++; G.pointIn = 0; }
+  cursor.classList.toggle('point', !!G.sel);
+  if (!G.sel && G.pointIn >= 3){
+    G.sel = { x0: p8.x, base: G.param };
+    $('dial').classList.add('selecting'); showDial();
+  }
+  if (G.sel){
+    if (G.pointOut >= 4) endSelect();
+    else if (pointing){
+      const n = DIAL.length;
+      let f = G.sel.base + (p8.x - G.sel.x0) / (size * SEL_STEP);
+      // en los extremos el punto de partida se corre con el dedo: volver es inmediato, nunca hay que "deshacer" de más
+      if (f > n - 1 + 0.5){ G.sel.x0 += (f - (n - 0.5)) * size * SEL_STEP; f = n - 0.5; }
+      if (f < -0.5){ G.sel.x0 += (f + 0.5) * size * SEL_STEP; f = -0.5; }
+      let i = G.param;
+      while (f > i + 0.6 && i < n - 1) i++;
+      while (f < i - 0.6 && i > 0) i--;
+      if (i !== G.param){ G.param = i; updateDialPill(); renderTabs(); pulseDial(); const p = DIAL[i]; G.target = G.disp = p.get(); G.dirty = true; }
     }
-  } else G.swipe.length = 0;
+  }
   // ✌️ sostenido medio segundo: foto con cuenta regresiva
-  if (!G.pinch && !open && isPeace(lm) && now > G.peaceCool){
+  if (!G.pinch && !G.sel && isPeace(lm) && now > G.peaceCool){
     if (!G.peaceT) G.peaceT = now;
     else if (now - G.peaceT > 500){ G.peaceT = 0; G.peaceCool = now + 6000; startCountdown(); }
   } else G.peaceT = 0;
@@ -643,8 +664,7 @@ function releaseGrab(){
   if (p.heavy && G.pending >= 0 && G.pending !== p.get()) p.set(G.pending);   // al soltar se aplica la montura elegida
   G.grabbed = false; G.pending = -1; G.dirty = true;
   G.target = p.kind === 'cont' ? p.get() : p.get();
-  G.shownUntil = performance.now() + 900;
-  setTimeout(() => { if (!G.grabbed && performance.now() >= G.shownUntil) $('dial').classList.remove('on'); }, 950);
+  hideDialLater(900);
 }
 // el dial va siempre en el mismo sitio, lejos de la cara: abajo al centro en pantallas verticales, a la derecha en horizontales
 function placeDial(){
@@ -662,10 +682,10 @@ function showDial(ms){
   closeSheet();
   placeDial();
   d.classList.add('on');
-  $('dialTabs').innerHTML = DIAL.map((q, i) => `<span class="${i === G.param ? 'on' : ''}">${q.short}</span>`).join('');
+  renderTabs();
   if (!G.grabbed){ const p = DIAL[G.param]; G.target = G.disp = p.get(); }
   G.dirty = true; drawDial();
-  if (ms){ G.shownUntil = performance.now() + ms; setTimeout(() => { if (!G.grabbed && performance.now() >= G.shownUntil) d.classList.remove('on'); }, ms + 50); }
+  if (ms) hideDialLater(ms);
 }
 function pulseDial(){ const d = $('dial'); d.animate([{ transform: 'translate(-50%,-50%) scale(1.05)' }, { transform: 'translate(-50%,-50%) scale(1)' }], { duration: 160 }); }
 // el motor llama esto cuando cambia algo: solo marca para redibujar en el próximo cuadro
@@ -701,7 +721,7 @@ function drawDial(){
   if (!svg) return;
   $('dialParam').textContent = p.n;
   $('dialValue').textContent = p.kind === 'cont' ? p.label() : (p.labelOf && G.pending >= 0 ? p.labelOf(G.pending) : p.label());
-  $('dialHint').textContent = G.grabbed ? 'Suelta para dejarlo así' : 'Pellizca y gira la mano';
+  $('dialHint').textContent = G.sel ? 'Mueve el dedo ← → y bájalo para elegir' : G.grabbed ? 'Suelta para dejarlo así' : 'Pellizca y gira la mano';
   const R = 86, parts = [];
   parts.push(`<circle r="${R}" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="10"/>`);
   if (p.kind === 'cont'){
@@ -711,6 +731,20 @@ function drawDial(){
     parts.push(`<path d="M${x0} ${y0} A${R} ${R} 0 1 1 ${xe} ${ye}" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="10" stroke-linecap="round"/>`);
     if (v > 0.002) parts.push(`<path d="M${x0} ${y0} A${R} ${R} 0 ${av - a0 > 180 ? 1 : 0} 1 ${x1} ${y1}" fill="none" stroke="url(#dialGrad)" stroke-width="10" stroke-linecap="round"/>`);
     parts.push(`<circle cx="${x1}" cy="${y1}" r="9" fill="#fff"/>`);
+  } else if (p.swatch){
+    // muestras de color alrededor del aro: giran con el valor y la de arriba es la elegida
+    const n = p.count(), sp = 360 / Math.max(n, 10), half = n / 2;
+    const cur = G.pending >= 0 ? G.pending : ((Math.round(G.disp) % n) + n) % n;
+    const small = n > 12 ? 6.5 : 9.5;
+    for (let i = 0; i < n; i++){
+      let off = i - G.disp; off = ((off % n) + n) % n; if (off >= half) off -= n;
+      const a = (-90 + off * sp) * Math.PI / 180, on = i === cur;
+      const fade = Math.max(0.25, 1 - Math.abs(off) / (half + 0.5));
+      const sw = p.swatch(i), r = on ? 14 : small;
+      const fill = sw.carey ? 'url(#dialCarey)' : sw.clear ? 'rgba(255,255,255,.18)' : sw.fill;
+      parts.push(`<circle cx="${R * Math.cos(a)}" cy="${R * Math.sin(a)}" r="${r}" fill="${fill}" opacity="${on ? 1 : fade.toFixed(2)}" stroke="${on ? '#fff' : 'rgba(255,255,255,.7)'}" stroke-width="${on ? 3.5 : 1.4}"/>`);
+    }
+    parts.push(`<path d="M-7 ${-R - 26} L7 ${-R - 26} L0 ${-R - 17} Z" fill="#fff"/>`);
   } else {
     // los ticks giran con el valor continuo; el de arriba es el elegido
     const n = p.count(), sp = 360 / Math.max(n, 12), half = n / 2;
@@ -724,11 +758,11 @@ function drawDial(){
     }
     parts.push(`<path d="M-7 ${-R - 22} L7 ${-R - 22} L0 ${-R - 12} Z" fill="#fff"/>`);   // marca fija arriba
   }
-  if (G.grabbed){   // marca del giro de la mano, sobre el borde exterior
+  if (G.grabbed && !p.swatch){   // marca del giro de la mano, sobre el borde exterior
     const a = -Math.PI / 2 + G.dispDelta;
     parts.push(`<circle cx="${(R + 16) * Math.cos(a)}" cy="${(R + 16) * Math.sin(a)}" r="6" fill="#fff" stroke="rgba(0,0,0,.25)"/>`);
   }
-  svg.innerHTML = `<defs><linearGradient id="dialGrad" x1="0" x2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#9fb8ff"/><stop offset="1" stop-color="#3a3f4a"/></linearGradient></defs>${parts.join('')}`;
+  svg.innerHTML = `<defs><radialGradient id="dialCarey" cx=".3" cy=".3"><stop offset="0" stop-color="#c98a3d"/><stop offset=".55" stop-color="#6b3a14"/><stop offset="1" stop-color="#2a1608"/></radialGradient><linearGradient id="dialGrad" x1="0" x2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#9fb8ff"/><stop offset="1" stop-color="#3a3f4a"/></linearGradient></defs>${parts.join('')}`;
 }
 
 /* ---------- Teclado (para la demo en laptop) ---------- */
@@ -811,7 +845,7 @@ startIntroLoop();
 updateDialPill();
 
 // Acceso para pruebas desde la consola del navegador
-window.__probador = { loadEnvironment, personal, updateLens, buildTintUI, FILT, fPos, fRot, fScale, THREE, renderer, camera, scene, videoMesh, state, anchor, skull, faceOcc, glasses, fit, HEAD,
+window.__probador = { setFrame, loadEnvironment, personal, updateLens, buildTintUI, FILT, fPos, fRot, fScale, THREE, renderer, camera, scene, videoMesh, state, anchor, skull, faceOcc, glasses, fit, HEAD,
   goApp, goHome, openTab, showIntroFrame, handStep, G, DIAL, videoToScreen,
   get screen(){ return screen; }, get headOcc(){ return headOcc; }, get current(){ return current; } };
 

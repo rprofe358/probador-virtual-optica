@@ -43,6 +43,7 @@ Se activa con la tecla **D** o con **5 toques seguidos** sobre el nombre de la �
 - `monturas/`: modelos 3D de las monturas (`.glb`, Y arriba, frente hacia +Z, lentes en un objeto llamado `lente`).
 - `herramientas/preparar-monturas.mjs`: limpia y comprime un modelo descargado (requiere Node y `@gltf-transform`).
 - `herramientas/preparar-lote.mjs`: prepara un lote de monturas descargadas de una vez: nombra o genera los lentes, unifica materiales, simplifica la geometría y pasa las texturas a WebP. La configuración de cada montura está al inicio del archivo.
+- `herramientas/crear-tres-piezas.mjs`: genera por código la montura de tres piezas (lente al aire con canto visible, puente, plaquetas y patillas de titanio).
 - `herramientas/empaquetar.py`: genera una versión en un solo archivo HTML con los modelos incluidos.
 
 ## Créditos
@@ -54,6 +55,8 @@ Entorno: «Royal Esplanade» de [Poly Haven](https://polyhaven.com/a/royal_espla
 Cabeza para la oclusión: «Male Head» de [Alexander Antipov](https://sketchfab.com/Dessen), https://sketchfab.com/3d-models/male-head-0247a25a04ba46b99629130277fe39b7 (CC BY 4.0). Se alineó a la cara canónica, se quitó la zona de la cara y los materiales.
 
 ### Monturas 3D
+
+La montura «Tres piezas» se genera por código (`herramientas/crear-tres-piezas.mjs`).
 
 Todas de Sketchfab con licencia [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Se reorientaron, simplificaron y comprimieron; en algunas se unificaron materiales, se separaron o generaron los lentes y se quitó una firma de texto. Los nombres de modelo y marca solo describen el estilo del modelo 3D.
 

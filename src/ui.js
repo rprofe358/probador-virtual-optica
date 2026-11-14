@@ -407,7 +407,7 @@ async function goApp(tab = null){
     setTimeout(() => flashNow(3200), 500);
     lastActivity = performance.now();
     // la primera vez, recordar que existe el dial con la mano
-    if (!goApp.tipShown){ goApp.tipShown = true; setTimeout(() => { if (screen === 'app' && G.on) toast('Pellizca y gira la mano para el dial · ✌️ para la foto', 6000); }, 2500); }
+    if (!goApp.tipShown){ goApp.tipShown = true; setTimeout(() => { if (screen === 'app' && G.on) toast('Pellizca y gira la mano para el dial · desliza la mano abierta para cambiar de control · ✌️ para la foto', 7000); }, 2500); }
   } finally { starting = false; }
 }
 function goHome(){
@@ -443,7 +443,8 @@ const G = { on: true, ready: false, param: 0,
             cur: { x: 0, y: 0, t: null },   // cursor dibujado (se interpola a 60 fps)
             target: 0, disp: 0,         // valor del dial: destino y lo que se dibuja
             delta: 0, dispDelta: 0, pending: -1, pendingT: 0, dirty: true, shownUntil: 0,
-            angHist: [], spike: 0, p0Prev: null, lastAng: 0, cIdx: 0 };
+            angHist: [], spike: 0, p0Prev: null, lastAng: 0, cIdx: 0,
+            swipe: [], swipeCool: 0 };
 const LENS_OPTS = TR.flatMap(t => t.colores.map((c, ci) => ({ type: t.id, color: ci, n: t.id === 'claro' ? 'Sin Transitions' : (c.n === t.n ? t.n : `${t.n} · ${c.n}`) })));
 const DIAL = [
   { id: 'luz', n: 'Oscuridad del lente', kind: 'cont', short: 'Oscuridad',
@@ -466,6 +467,7 @@ const STEP = THREE.MathUtils.degToRad(22);   // un paso del dial cada 22° de gi
 const DEAD = THREE.MathUtils.degToRad(3);    // zona muerta: el temblor de la mano no mueve nada
 const DWELL_MS = 350;                        // la montura cambia cuando el dial se queda quieto este tiempo
 const MAX_JUMP = THREE.MathUtils.degToRad(40);   // giro imposible entre dos cuadros: error de detección
+const SWIPE_MS = 420, SWIPE_DIST = 1.5, SWIPE_COOL = 850;   // deslizar: 1,5 manos de recorrido en < 0,42 s
 const HYST = 0.7;                            // cuánto pasar del medio para cambiar de paso
 
 async function initHands(){
@@ -491,11 +493,13 @@ $('btnDial').addEventListener('click', () => {
   if (state.debug){ G.on = !G.on; updateDialPill(); toast(G.on ? 'Gestos activados' : 'Gestos desactivados', 1600); return; }
   $('gestureHelp').hidden = false;   // tocar «Gestos» explica cómo se usan
 });
-function nextParam(fromTap){
-  G.param = (G.param + 1) % DIAL.length;
+// deslizar la mano abierta: a la derecha el siguiente control, a la izquierda el anterior
+function switchParam(dir){
+  G.param = (G.param + dir + DIAL.length) % DIAL.length;
   updateDialPill();
-  const r = $('app').getBoundingClientRect();
-  showDial(fromTap ? r.width / 2 : G.pos.x, fromTap ? r.height * 0.5 : G.pos.y, 1400);
+  showDial(1800);
+  const d = $('dial');
+  d.animate([{ translate: `${dir * 26}px 0`, opacity: .4 }, { translate: '0 0', opacity: 1 }], { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' });
 }
 
 // coordenadas normalizadas del video → píxeles de pantalla (con el espejo)
@@ -515,6 +519,7 @@ function isOpenPalm(lm){
   const spread = Math.hypot(lm[8].x - lm[20].x, lm[8].y - lm[20].y) > size * 0.75;
   return fingers && thumbOut && spread;
 }
+function fourFingersUp(lm){ return [[8, 6], [12, 10], [16, 14], [20, 18]].every(([t, p]) => fingerUp(lm, t, p)); }
 function fingerUp(lm, tip, pip){ const w = lm[0]; return Math.hypot(lm[tip].x - w.x, lm[tip].y - w.y) > Math.hypot(lm[pip].x - w.x, lm[pip].y - w.y) * 1.12; }
 function isPeace(lm){   // ✌️ índice y medio arriba y separados, anular y meñique doblados
   const w = lm[0], size = Math.hypot(lm[9].x - w.x, lm[9].y - w.y);
@@ -537,7 +542,7 @@ function handStep(res, now){
   if (!lm){
     if (now - G.lastHand > 350){ releaseGrab(); cursor.classList.remove('on'); G.cur.t = null; G.rawPrev = null; }
     if (now > G.shownUntil && !G.grabbed) $('dial').classList.remove('on');
-    G.peaceT = 0; G.palmT = 0;
+    G.peaceT = 0; G.palmT = 0; if (now - G.lastHand > 350) G.swipe.length = 0;
     return;
   }
   G.lastHand = now; lastActivity = now;
@@ -590,7 +595,7 @@ function handStep(res, now){
     const p = DIAL[G.param];
     G.grabbed = true; G.grabAng = ang; G.grabVal = p.get(); G.target = G.disp = G.grabVal; G.delta = G.dispDelta = 0; G.pending = -1;
     G.cIdx = p.kind === 'disc' ? G.grabVal : 0;
-    showDial(mid.x, mid.y);
+    showDial();
   }
   if (G.grabbed && !opening){
     const p = DIAL[G.param];
@@ -614,12 +619,18 @@ function handStep(res, now){
     }
     G.dirty = true;
   }
-  // mano abierta un momento: cambiar lo que controla el dial
-  const open = !G.pinch && isOpenPalm(lm);
-  if (open){
-    if (!G.palmT) G.palmT = now;
-    else if (now - G.palmT > 900){ G.palmT = now + 1e6; nextParam(false); }
-  } else G.palmT = 0;
+  // mano abierta deslizándose a un lado: siguiente o anterior control del dial
+  const open = !G.pinch && fourFingersUp(lm);
+  if (open && !G.grabbed){
+    const c = { x: (p0.x + mc.x) / 2, y: (p0.y + mc.y) / 2, t: now };
+    G.swipe.push(c);
+    while (G.swipe.length && now - G.swipe[0].t > SWIPE_MS) G.swipe.shift();
+    const a = G.swipe[0], dx = c.x - a.x, dy = c.y - a.y;
+    if (now > G.swipeCool && Math.abs(dx) > size * SWIPE_DIST && Math.abs(dx) > Math.abs(dy) * 2){
+      G.swipe.length = 0; G.swipeCool = now + SWIPE_COOL;   // la pausa evita que el regreso de la mano cuente como otro gesto
+      switchParam(dx > 0 ? 1 : -1);
+    }
+  } else G.swipe.length = 0;
   // ✌️ sostenido medio segundo: foto con cuenta regresiva
   if (!G.pinch && !open && isPeace(lm) && now > G.peaceCool){
     if (!G.peaceT) G.peaceT = now;
@@ -635,13 +646,23 @@ function releaseGrab(){
   G.shownUntil = performance.now() + 900;
   setTimeout(() => { if (!G.grabbed && performance.now() >= G.shownUntil) $('dial').classList.remove('on'); }, 950);
 }
-function showDial(x, y, ms){
-  const d = $('dial'), app = $('app'), r = d.offsetWidth / 2 || 140;
+// el dial va siempre en el mismo sitio, lejos de la cara: abajo al centro en pantallas verticales, a la derecha en horizontales
+function placeDial(){
+  const d = $('dial'), app = $('app'), r = d.offsetWidth / 2 || 120;
   const W = app.clientWidth, H = app.clientHeight;
   const dockTop = $('dock').getBoundingClientRect().top - app.getBoundingClientRect().top;
-  d.style.left = THREE.MathUtils.clamp(x, r + 12, W - r - 12) + 'px';
-  d.style.top = THREE.MathUtils.clamp(y, r + 80, Math.max(r + 80, dockTop - r - 12)) + 'px';
+  const tabsH = 54;
+  d.classList.toggle('side', W > H * 1.1);
+  if (W > H * 1.1){ d.style.left = (W - r - 28) + 'px'; d.style.top = Math.min(dockTop - r - 16, H * 0.55) + 'px'; }
+  else { d.style.left = (W / 2) + 'px'; d.style.top = Math.max(r + tabsH + 80, dockTop - r - 18) + 'px'; }
+}
+window.addEventListener('resize', () => { if ($('dial').classList.contains('on')) placeDial(); });
+function showDial(ms){
+  const d = $('dial');
+  closeSheet();
+  placeDial();
   d.classList.add('on');
+  $('dialTabs').innerHTML = DIAL.map((q, i) => `<span class="${i === G.param ? 'on' : ''}">${q.short}</span>`).join('');
   if (!G.grabbed){ const p = DIAL[G.param]; G.target = G.disp = p.get(); }
   G.dirty = true; drawDial();
   if (ms){ G.shownUntil = performance.now() + ms; setTimeout(() => { if (!G.grabbed && performance.now() >= G.shownUntil) d.classList.remove('on'); }, ms + 50); }

@@ -247,7 +247,7 @@ button:focus-visible,input:focus-visible,label:focus-visible{outline:2px solid v
     </button>
     <p class="status" id="status" role="status"></p>
   </div>
-<p class="credits intro-credits">Modelos 3D de prueba (Sketchfab, CC BY 4.0, adaptados): «Anteojos» de Orking, «Glasses» de AlbertVictory y «Glasses» de C.U.V. Cabeza para oclusión: «Male Head» de Alexander Antipov (CC BY 4.0). Entorno: Poly Haven (CC0). Malla facial: MediaPipe (Apache 2.0).</p>
+<p class="credits intro-credits">Monturas 3D (Sketchfab, CC BY 4.0, adaptadas): Orking, AlbertVictory, C.U.V, Kimppo, mrdicktwink, Pratham.Bhatnagar, raldlegaspigerald, culerdamage, VikyStefiniv, berkgedik, yanix, Sbell_Reality3D, cianurito, strakacher21, nattsol, kevinivancic, pedroni.mau, islem-rd y Agha.Najam. Cabeza para oclusión: «Male Head» de Alexander Antipov (CC BY 4.0). Entorno: Poly Haven (CC0). Malla facial: MediaPipe (Apache 2.0).</p>
 </section>
 
 <!-- ===================== PROBADOR ===================== -->
@@ -434,7 +434,59 @@ function fitPose(live, canon = CANON_V, idx = POSE_IDX){
    Medidas en notación óptica: ancho lente □ puente · largo patilla (mm)
    ========================================================= */
 const FRAMES = [
-  // ---- Modelos 3D reales (GLB). "anchoMm" fija el ancho frontal real de la montura.
+  // Modelos 3D reales (GLB). "medidas" (lente□puente · patilla) fija el tamaño real.
+  // Si un color no trae "hex", se usa el color original del modelo; "muestra" es el color del botón.
+  { id:'urbana', desc:'Frente de acetato y patillas de metal: liviana, moderna y perfecta para la oficina.', nombre:'Urbana', estilo:'Acetato y metal', ref:'OPT-520', medidas:'52□19 · 145',
+    modelo:'monturas/urbana-acetato-metal.glb',
+    colores:[{n:'Negro mate', muestra:'#1c1c1e'}] },
+  { id:'wayfarer-optico', desc:'La silueta Wayfarer en versión para fórmula: segura, versátil y con carácter.', nombre:'Wayfarer óptico', estilo:'Acetato', ref:'OPT-501', medidas:'50□22 · 145',
+    modelo:'monturas/wayfarer-optico.glb',
+    colores:[{n:'Negro brillante', muestra:'#111111'}] },
+  { id:'clubmaster', desc:'Ceja de acetato y aro inferior de metal: un clásico de los 50 que da presencia sin exagerar.', nombre:'Clubmaster', estilo:'Acetato y metal', ref:'OPT-502', medidas:'51□21 · 145',
+    modelo:'monturas/clubmaster.glb',
+    colores:[{n:'Negro y dorado', muestra:'#1a1a1a'}] },
+  { id:'aviador-optico', desc:'Doble puente y lentes en gota suave: el aviador de siempre, pensado para lentes formulados.', nombre:'Aviador óptico', estilo:'Metal doble puente', ref:'OPT-510', medidas:'55□15 · 145',
+    modelo:'monturas/aviador-optico.glb',
+    colores:[{n:'Cobre', muestra:'#b87348'}] },
+  { id:'aviador-clasico', desc:'El ícono de las gafas de piloto, con aro metálico fino y doble puente.', nombre:'Aviador clásico', estilo:'Metal doble puente', ref:'OPT-511', medidas:'58□14 · 140',
+    modelo:'monturas/aviador-clasico.glb',
+    colores:[{n:'Dorado', muestra:'#d9a85a'},{n:'Plata', hex:'#d6d9dc', muestra:'#c9ced2'},{n:'Gunmetal', hex:'#5f6366', muestra:'#5a5f63'},{n:'Negro mate', hex:'#2a2a2a', rough:0.6, muestra:'#2b2b2b'}] },
+  { id:'aviador-titanio', desc:'Aviador de titanio muy fino: casi no pesa y se siente discreto todo el día.', nombre:'Aviador titanio', estilo:'Titanio', ref:'OPT-512', medidas:'58□14 · 140',
+    modelo:'monturas/aviador-titanio.glb',
+    colores:[{n:'Negro', muestra:'#2a2a28'},{n:'Plata', hex:'#cfd3d6', muestra:'#c9ced2'},{n:'Dorado', hex:'#e2bd74', muestra:'#d4a64f'}] },
+  { id:'aviador-geometrico', desc:'Aviador de aro hexagonal con doble puente: moderno y con detalle.', nombre:'Aviador geométrico', estilo:'Metal doble puente', ref:'OPT-513', medidas:'56□16 · 145',
+    modelo:'monturas/aviador-geometrico.glb',
+    colores:[{n:'Oro rosa', muestra:'#e8b4a8'},{n:'Dorado', hex:'#e2bd74', muestra:'#d4a64f'},{n:'Plata', hex:'#d6d9dc', muestra:'#c9ced2'},{n:'Gunmetal', hex:'#5f6366', muestra:'#5a5f63'}] },
+  { id:'navegador', desc:'Aviador cuadrado de metal con doble puente: más sobrio y de líneas rectas.', nombre:'Navegador', estilo:'Metal doble puente', ref:'OPT-514', medidas:'57□15 · 145',
+    modelo:'monturas/navegador-metal.glb',
+    colores:[{n:'Dorado y negro', muestra:'#8a7f52'}] },
+  { id:'moscot-zev', desc:'Redonda de metal dorado con puente alto: un clásico neoyorquino, liviano y elegante.', nombre:'MOSCOT Zev', estilo:'Metal', ref:'ZEV-TT SE', medidas:'46□24 · 145',
+    modelo:'monturas/moscot-zev.glb',
+    colores:[{n:'Dorado', muestra:'#c9a85c'}] },
+  { id:'mustang', desc:'Acetato negro con detalles dorados en las patillas: cuadrada, segura y elegante.', nombre:'Mustang MU 1683', estilo:'Acetato', ref:'MU 1683', medidas:'54□18 · 145',
+    modelo:'monturas/mustang-mu1683.glb',
+    colores:[{n:'Negro', muestra:'#141414'}] },
+  { id:'ejecutiva', desc:'Rectangular de perfil delgado: sobria, profesional y fácil de llevar.', nombre:'Ejecutiva', estilo:'Acetato', ref:'OPT-521', medidas:'54□17 · 145',
+    modelo:'monturas/ejecutiva-rectangular.glb',
+    colores:[{n:'Gris humo', muestra:'#7d7676'},{n:'Negro mate', hex:'#1f1f1f', metal:0, rough:0.7, muestra:'#1f1f1f'},{n:'Azul noche', hex:'#1d2c4f', metal:0, rough:0.45, muestra:'#1d2c4f'},{n:'Vino', hex:'#5c1622', metal:0, rough:0.45, muestra:'#5c1622'}] },
+  { id:'clasica', desc:'Cuadrada de bordes suaves: favorece a casi todos los rostros.', nombre:'Clásica', estilo:'Acetato', ref:'OPT-522', medidas:'52□18 · 140',
+    modelo:'monturas/clasica-acetato.glb',
+    colores:[{n:'Azul noche', muestra:'#232334'},{n:'Negro', hex:'#151515', rough:0.5, muestra:'#151515'},{n:'Vino', hex:'#5c1622', rough:0.5, muestra:'#5c1622'},{n:'Verde oliva', hex:'#4a4f32', rough:0.5, muestra:'#4a4f32'}] },
+  { id:'cuadrada-fina', desc:'Cuadrada pequeña de acetato delgado, con remaches metálicos al frente.', nombre:'Cuadrada fina', estilo:'Acetato', ref:'OPT-523', medidas:'48□21 · 145',
+    modelo:'monturas/cuadrada-fina.glb',
+    colores:[{n:'Negro', muestra:'#222222'}] },
+  { id:'semi-fina', desc:'Aro de metal solo arriba y lente al aire abajo: discreta y muy liviana.', nombre:'Semi al aire fina', estilo:'Metal · nylon', ref:'OPT-524', medidas:'53□18 · 140',
+    modelo:'monturas/semi-al-aire-fina.glb',
+    colores:[{n:'Negro', muestra:'#141414'},{n:'Plata', hex:'#cfd3d6', metal:1, rough:0.25, muestra:'#c9ced2'},{n:'Dorado', hex:'#e2bd74', metal:1, rough:0.25, muestra:'#d4a64f'},{n:'Azul', hex:'#2a3a6b', muestra:'#2a3a6b'}] },
+  { id:'geometrica', desc:'Metal fino de forma octagonal suave: moderna y ligera.', nombre:'Geométrica', estilo:'Metal', ref:'OPT-525', medidas:'53□18 · 145',
+    modelo:'monturas/geometrica-metal.glb',
+    colores:[{n:'Azul', muestra:'#1f2fb0'},{n:'Dorado', hex:'#e2bd74', muestra:'#d4a64f'},{n:'Plata', hex:'#d6d9dc', muestra:'#c9ced2'},{n:'Negro', hex:'#222222', rough:0.4, muestra:'#222222'}] },
+  { id:'redonda-cobre', desc:'Redonda de metal con plaquetas: un toque retro, liviano y versátil.', nombre:'Redonda cobre', estilo:'Metal', ref:'OPT-526', medidas:'50□21 · 145',
+    modelo:'monturas/redonda-metal-cobre.glb',
+    colores:[{n:'Cobre', muestra:'#b87348'}] },
+  { id:'wayfarer', desc:'La forma más reconocible del acetato, en su versión para sol.', nombre:'Wayfarer', estilo:'Acetato', ref:'OPT-101', medidas:'50□22 · 150',
+    modelo:'monturas/wayfarer-sol.glb',
+    colores:[{n:'Negro mate', muestra:'#1a1a1a'},{n:'Negro brillante', hex:'#0e0e0e', rough:0.2, muestra:'#0e0e0e'},{n:'Azul noche', hex:'#1d2c4f', rough:0.3, muestra:'#1d2c4f'},{n:'Vino', hex:'#5c1622', rough:0.3, muestra:'#5c1622'}] },
   { id:'redonda', desc:'Aro metálico fino y lentes redondos: un clásico liviano que suaviza los rostros angulosos.', nombre:'Redonda clásica', estilo:'Metal', ref:'OPT-204', medidas:'47□22 · 145',
     modelo:'monturas/redonda-metal.glb', anchoMm:130,
     colores:[{n:'Plata', muestra:'#c9ced2'},{n:'Dorado', hex:'#e8bd6a', muestra:'#d4a64f'},{n:'Negro mate', hex:'#3a3a3a', rough:0.65, muestra:'#2b2b2b'}] },
@@ -445,16 +497,6 @@ const FRAMES = [
   { id:'semi', desc:'Aro metálico arriba y lente al aire abajo: discreta, liviana y muy de oficina.', nombre:'Semi al aire', estilo:'Metal · nylon', ref:'OPT-415', medidas:'53□18 · 140',
     modelo:'monturas/semi-al-aire.glb', anchoMm:135,
     colores:[{n:'Grafito y azul', muestra:'#2b2f36'}] },
-  // ---- Monturas generadas por código (marcador de posición)
-  { id:'wayfarer', desc:'La forma más reconocible del acetato: segura, versátil y con carácter.', nombre:'Wayfarer', estilo:'Acetato', ref:'OPT-101', medidas:'52□18 · 145',
-    shape:'wayfarer', metal:false, rim:0.042, brow:0.7, depth:0.032, bridge:0.12, offY:0.01,
-    colores:[{n:'Negro brillante',hex:'#151515'},{n:'Carey',hex:'carey'},{n:'Cristal',hex:'#dfe4e6',clear:true}] },
-  { id:'gatita', desc:'Esquinas que suben y abren la mirada. Femenina y con presencia.', nombre:'Ojo de gato', estilo:'Acetato', ref:'OPT-122', medidas:'53□17 · 140',
-    shape:'catEye', metal:false, rim:0.038, brow:0.9, depth:0.03, bridge:0.12, offY:0.012,
-    colores:[{n:'Carey',hex:'carey'},{n:'Vino',hex:'#6b1d2a'},{n:'Negro brillante',hex:'#151515'}] },
-  { id:'aviador', desc:'Doble puente y lentes en gota: el ícono de las gafas de sol.', nombre:'Aviador', estilo:'Metal doble puente', ref:'OPT-310', medidas:'58□14 · 140',
-    shape:'aviador', metal:true, rim:0.011, depth:0.012, bridge:0.13, offY:-0.005, doubleBridge:true,
-    colores:[{n:'Dorado',hex:'#c9a45c'},{n:'Gunmetal',hex:'#5a5f63'},{n:'Plata',hex:'#c9ced2'}] },
 ];
 
 /* Transitions: tipos y colores reales de la línea actual.
@@ -2507,7 +2549,7 @@ startIntroLoop();
 updateDialPill();
 
 // Acceso para pruebas desde la consola del navegador
-window.__probador = { setFrame, loadEnvironment, personal, updateLens, buildTintUI, FILT, fPos, fRot, fScale, THREE, renderer, camera, scene, videoMesh, state, anchor, skull, faceOcc, glasses, fit, HEAD,
+window.__probador = { setFrame, FRAMES, loadEnvironment, personal, updateLens, buildTintUI, FILT, fPos, fRot, fScale, THREE, renderer, camera, scene, videoMesh, state, anchor, skull, faceOcc, glasses, fit, HEAD,
   goApp, goHome, openTab, showIntroFrame, handStep, G, DIAL, videoToScreen,
   get screen(){ return screen; }, get headOcc(){ return headOcc; }, get current(){ return current; } };
 

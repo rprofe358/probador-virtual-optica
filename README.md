@@ -41,7 +41,8 @@ Se activa con la tecla **D** o con **5 toques seguidos** sobre el nombre de la �
 - `recursos/cabeza-oclusor.glb`: cabeza invisible para la oclusión, ya alineada a la cara canónica de MediaPipe.
 - `herramientas/preparar-cabeza.mjs`: alinea otro modelo de cabeza con la cara canónica.
 - `monturas/`: modelos 3D de las monturas (`.glb`, Y arriba, frente hacia +Z, lentes en un objeto llamado `lente`).
-- `herramientas/preparar-monturas.mjs`: limpia y comprime modelos descargados (requiere Node y `@gltf-transform`).
+- `herramientas/preparar-monturas.mjs`: limpia y comprime un modelo descargado (requiere Node y `@gltf-transform`).
+- `herramientas/preparar-lote.mjs`: prepara un lote de monturas descargadas de una vez: nombra o genera los lentes, unifica materiales, simplifica la geometría y pasa las texturas a WebP. La configuración de cada montura está al inicio del archivo.
 - `herramientas/empaquetar.py`: genera una versión en un solo archivo HTML con los modelos incluidos.
 
 ## Créditos
@@ -52,10 +53,27 @@ Entorno: «Royal Esplanade» de [Poly Haven](https://polyhaven.com/a/royal_espla
 
 Cabeza para la oclusión: «Male Head» de [Alexander Antipov](https://sketchfab.com/Dessen), https://sketchfab.com/3d-models/male-head-0247a25a04ba46b99629130277fe39b7 (CC BY 4.0). Se alineó a la cara canónica, se quitó la zona de la cara y los materiales.
 
-### Modelos 3D de prueba
+### Monturas 3D
 
-Licencia [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Los modelos fueron reorientados, comprimidos y, en un caso, se separaron los lentes y se quitó una firma de texto.
+Todas de Sketchfab con licencia [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Se reorientaron, simplificaron y comprimieron; en algunas se unificaron materiales, se separaron o generaron los lentes y se quitó una firma de texto. Los nombres de modelo y marca solo describen el estilo del modelo 3D.
 
-- «Anteojos» de [Orking](https://sketchfab.com/Orking): https://sketchfab.com/3d-models/anteojos-837aebe59d3540318b41024dd7d5a76c
-- «Glasses» de [AlbertVictory](https://sketchfab.com/albert_victory): https://sketchfab.com/3d-models/glasses-4b8a1e54f3084c63828fe8c324198aec
-- «Glasses» de [C.U.V](https://sketchfab.com/C.U.V): https://sketchfab.com/3d-models/glasses-05497943410d4a7388695190a5a68eac
+- Redonda clásica: «Anteojos» de [Orking](https://sketchfab.com/Orking), https://sketchfab.com/3d-models/837aebe59d3540318b41024dd7d5a76c
+- Rectangular: «Glasses» de [AlbertVictory](https://sketchfab.com/AlbertVictory), https://sketchfab.com/3d-models/4b8a1e54f3084c63828fe8c324198aec
+- Semi al aire: «Glasses» de [C.U.V](https://sketchfab.com/C.U.V), https://sketchfab.com/3d-models/05497943410d4a7388695190a5a68eac
+- Urbana: «Glasses» de [yanix](https://sketchfab.com/yanix), https://sketchfab.com/3d-models/2a39a445c6b84ce89974ec2d0ae67061
+- Wayfarer óptico: «Black Wayfarer Glasses» de [islem-rd](https://sketchfab.com/islem-rd), https://sketchfab.com/3d-models/9a20e0cc78534323a3357ac632bf7ee2
+- Clubmaster: «Gold and Black Browline Glasses» de [islem-rd](https://sketchfab.com/islem-rd), https://sketchfab.com/3d-models/e72b5ba610e248f289a209558f3c9301
+- Aviador óptico: «EyeGlass» de [raldlegaspigerald](https://sketchfab.com/raldlegaspigerald), https://sketchfab.com/3d-models/154e3f7fdd8544fd88d560b9cb73063f
+- Aviador clásico: «Aviator sunglasses» de [Kimppo](https://sketchfab.com/Kimppo), https://sketchfab.com/3d-models/00d1cb5aa82745228a3b764c97f867de
+- Aviador titanio: «Aviator titanium sunglasses» de [mrdicktwink](https://sketchfab.com/mrdicktwink), https://sketchfab.com/3d-models/727fcd6989e7473a9df1f23af9d21cbd
+- Aviador geométrico: «Eyeglasses (Specs)» de [Pratham.Bhatnagar](https://sketchfab.com/Pratham.Bhatnagar), https://sketchfab.com/3d-models/a9e23529a9a5417a8db9df961a7d42af
+- Navegador: «Glasses» de [culerdamage](https://sketchfab.com/culerdamage), https://sketchfab.com/3d-models/a00f60192d1740f49902009c3d0aac05
+- MOSCOT Zev: «GLASSES - MOSCOT ZEV-TT SE» de [VikyStefiniv](https://sketchfab.com/VikyStefiniv), https://sketchfab.com/3d-models/20e76258ad1542bcae86d2daa6c27c57
+- Mustang MU 1683: «Mustang Sunglasses - MU 1683» de [berkgedik](https://sketchfab.com/berkgedik), https://sketchfab.com/3d-models/eeec9fbb427246959acee4e4266b0f0a
+- Ejecutiva: «Glasses 10k Polygons» de [Sbell_Reality3D](https://sketchfab.com/Sbell_Reality3D), https://sketchfab.com/3d-models/e4f348e98ceb45e3abc77da5b738f1b2
+- Clásica: «Black Glasses» de [cianurito](https://sketchfab.com/cianurito), https://sketchfab.com/3d-models/c3603763da7c41359f58f7943bf06ab6
+- Cuadrada fina: «Square glasses» de [strakacher21](https://sketchfab.com/strakacher21), https://sketchfab.com/3d-models/b4546d8e0b7845eeafd88feb48057610
+- Semi al aire fina: «Glasses 3D model» de [nattsol](https://sketchfab.com/nattsol), https://sketchfab.com/3d-models/74c1d202ac0249e39823e379e2b065e9
+- Geométrica: «transparent_glasses (1)» de [kevinivancic](https://sketchfab.com/kevinivancic), https://sketchfab.com/3d-models/648789df777e4d498bf14b9d4dc86d9b
+- Redonda cobre: «Ray Ban Glasses» de [Agha.Najam](https://sketchfab.com/Agha.Najam), https://sketchfab.com/3d-models/bb3a3736110a41bdacc9f92e11831a41
+- Wayfarer: «Wayfarer» de [pedroni.mau](https://sketchfab.com/pedroni.mau), https://sketchfab.com/3d-models/8a5b21b25141419983908e0518f96233

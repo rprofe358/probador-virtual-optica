@@ -845,7 +845,7 @@ startIntroLoop();
 updateDialPill();
 
 // Acceso para pruebas desde la consola del navegador
-window.__probador = { setFrame, loadEnvironment, personal, updateLens, buildTintUI, FILT, fPos, fRot, fScale, THREE, renderer, camera, scene, videoMesh, state, anchor, skull, faceOcc, glasses, fit, HEAD,
+window.__probador = { setFrame, FRAMES, loadEnvironment, personal, updateLens, buildTintUI, FILT, fPos, fRot, fScale, THREE, renderer, camera, scene, videoMesh, state, anchor, skull, faceOcc, glasses, fit, HEAD,
   goApp, goHome, openTab, showIntroFrame, handStep, G, DIAL, videoToScreen,
   get screen(){ return screen; }, get headOcc(){ return headOcc; }, get current(){ return current; } };
 
